@@ -70,6 +70,17 @@ export function createAudioEngine() {
   let atmosphereBus = null
   let atmosphere = null // { id, nodes, stop() }
 
+  /**
+   * Whether the search is over.
+   *
+   * Through the questions the drone tracks the colour and climbs — each answer
+   * pushes it somewhere new, and that rising tension is what makes the wait
+   * before the reveal work. Once the colour exists, holding that tension would
+   * be wrong: the room drops an octave, the filter closes, and the whole thing
+   * exhales. Resolution, not suspense.
+   */
+  let atRest = false
+
   // The drone sits well under the interaction tones — it should be felt as
   // room rather than heard as a note.
   const AMBIENT_LEVEL = 0.042
@@ -174,19 +185,34 @@ export function createAudioEngine() {
     const ratio = hueToRatio(colour.h)
     // Lighter colours sit an octave up; the room brightens with them.
     const octave = colour.l > 0.68 ? 2 : 1
+    // At rest the whole room drops an octave — the same colour, an exhale lower.
+    const settle = atRest ? 0.5 : 1
 
     voices.forEach(({ osc, mult }) => {
-      osc.frequency.setTargetAtTime(ROOT_HZ * mult * ratio * octave, now, glide)
+      osc.frequency.setTargetAtTime(ROOT_HZ * mult * ratio * octave * settle, now, glide)
     })
 
     // Chroma opens the filter — a grey colour sounds muffled, a vivid one bright.
-    const cutoff = 340 + colour.c * 3600 + colour.l * 420
+    // Resting closes it down: less air, more body.
+    const cutoff = (340 + colour.c * 3600 + colour.l * 420) * (atRest ? 0.62 : 1)
     filter.frequency.setTargetAtTime(cutoff, now, glide * 0.6)
   }
 
   function setColour(next) {
     colour = next
     applyColour()
+  }
+
+  /**
+   * Resolve or re-tension the room. Called when the colour is revealed, and
+   * again if the visitor goes back to the questions.
+   */
+  function setAtRest(next) {
+    if (atRest === next) return
+    atRest = next
+    // Slower than a normal retune — this is meant to be felt settling, not
+    // heard as a jump.
+    applyColour(3.4)
   }
 
   /**
@@ -389,6 +415,7 @@ export function createAudioEngine() {
     start,
     setMuted,
     setColour,
+    setAtRest,
     setAtmosphere,
     tone,
     dispose,

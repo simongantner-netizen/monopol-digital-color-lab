@@ -20,6 +20,47 @@ const rise = {
   }),
 }
 
+/**
+ * Typographic reveal, one word at a time.
+ *
+ * Each line is a window with `overflow: hidden`; the words rise into it from
+ * below their own baseline, so they appear to be uncovered rather than faded
+ * in — the letterforms are never shown half-transparent or blurred, which is
+ * what makes a wordmark-grade typeface look cheap. The line, not the letter,
+ * is the unit: per-character animation on a headline this size reads as a
+ * gimmick, per-word reads as speech.
+ */
+function Line({ children, delay = 0 }) {
+  return (
+    <span className="block overflow-hidden py-[0.08em]">
+      <motion.span
+        className="block"
+        initial={{ y: '110%' }}
+        animate={{ y: 0 }}
+        transition={{ duration: 1.35, delay, ease: [0.16, 1, 0.3, 1] }}
+      >
+        {children}
+      </motion.span>
+    </span>
+  )
+}
+
+/** A word inside a Line, with its own small offset so the line un-stiffens. */
+function Word({ children, className = '', delay = 0 }) {
+  return (
+    <motion.span
+      className={`inline-block ${className}`}
+      initial={{ y: '18%', opacity: 0.55 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ duration: 1.5, delay: 0.55 + delay, ease: [0.16, 1, 0.3, 1] }}
+    >
+      {children}
+      {/* Trailing space has to live outside the transform to survive it. */}
+      <span className="inline-block w-[0.26em]" />
+    </motion.span>
+  )
+}
+
 function Headphones() {
   return (
     <svg width="30" height="30" viewBox="0 0 30 30" fill="none" aria-hidden="true">
@@ -74,6 +115,62 @@ function Headphones() {
   )
 }
 
+/** Companion to the headphones: a screen and a tablet, drawn the same way. */
+function Screens() {
+  return (
+    <svg width="34" height="30" viewBox="0 0 34 30" fill="none" aria-hidden="true">
+      {/* Display, drawn on */}
+      <motion.rect
+        x="1.6"
+        y="4.4"
+        width="20.5"
+        height="14"
+        rx="1.6"
+        stroke="currentColor"
+        strokeWidth="1.15"
+        initial={{ pathLength: 0, opacity: 0 }}
+        animate={{ pathLength: 1, opacity: 1 }}
+        transition={{ duration: 1.4, delay: 1.15, ease }}
+      />
+      {/* Stand */}
+      <motion.path
+        d="M8.6 22.4h6.5M11.85 18.4v4"
+        stroke="currentColor"
+        strokeWidth="1.15"
+        strokeLinecap="round"
+        initial={{ pathLength: 0, opacity: 0 }}
+        animate={{ pathLength: 1, opacity: 1 }}
+        transition={{ duration: 0.8, delay: 2.05, ease }}
+      />
+      {/* Tablet, leaning in beside it */}
+      <motion.rect
+        x="24"
+        y="9"
+        width="8.6"
+        height="13.4"
+        rx="1.4"
+        stroke="currentColor"
+        strokeWidth="1.15"
+        initial={{ opacity: 0, y: 3 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.9, delay: 2.25, ease }}
+      />
+      {/* A slow glint travelling across the display */}
+      <motion.rect
+        x="1.6"
+        y="4.4"
+        width="20.5"
+        height="14"
+        rx="1.6"
+        fill="currentColor"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: [0, 0.14, 0] }}
+        transition={{ duration: 3.2, delay: 3.4, repeat: Infinity, repeatDelay: 3.6, ease: 'easeInOut' }}
+      />
+    </svg>
+  )
+}
+
 export default function Intro({ onBegin }) {
   return (
     <motion.section
@@ -94,25 +191,49 @@ export default function Intro({ onBegin }) {
       </motion.p>
 
       <h1 className="max-w-[19ch] text-[clamp(2.6rem,7.2vw,6.4rem)] leading-[0.98] font-light tracking-[-0.028em] text-chalk">
-        <motion.span
-          className="block"
-          variants={rise}
-          initial="hidden"
-          animate="show"
-          custom={1}
-        >
-          Every <span className="accent">colour</span>
-        </motion.span>
-        <motion.span
-          className="block"
-          variants={rise}
-          initial="hidden"
-          animate="show"
-          custom={2}
-        >
-          <span className="text-ash">begins with questions.</span>{' '}
-          <span className="whitespace-nowrap">Design yours.</span>
-        </motion.span>
+        <Line delay={0.55}>
+          <Word>Every</Word>
+          <Word delay={0.09}>
+            {/*
+              The one word that is the subject of the whole application gets
+              the one treatment nothing else does: it arrives already lit, runs
+              once through the spectrum, and settles into chalk. A colour lab
+              should show what it does before it explains it.
+            */}
+            <motion.span
+              className="accent inline-block"
+              initial={{ color: 'var(--color-chalk)' }}
+              animate={{
+                color: [
+                  'var(--color-chalk)',
+                  'oklch(0.72 0.19 28)',
+                  'oklch(0.82 0.16 92)',
+                  'oklch(0.72 0.15 155)',
+                  'oklch(0.68 0.16 240)',
+                  'var(--color-chalk)',
+                ],
+              }}
+              transition={{ duration: 4.2, delay: 1.5, times: [0, 0.16, 0.34, 0.54, 0.74, 1], ease: 'easeInOut' }}
+            >
+              colour
+            </motion.span>
+          </Word>
+        </Line>
+
+        <Line delay={0.78}>
+          <Word className="text-ash">begins</Word>
+          <Word className="text-ash" delay={0.07}>
+            with
+          </Word>
+          <Word className="text-ash" delay={0.14}>
+            questions.
+          </Word>
+        </Line>
+
+        <Line delay={1.06}>
+          <Word>Design</Word>
+          <Word delay={0.08}>yours.</Word>
+        </Line>
       </h1>
 
       <motion.p
@@ -126,22 +247,36 @@ export default function Intro({ onBegin }) {
         in the lab with us.
       </motion.p>
 
-      {/* Headphones first, button second. */}
+      {/* Both conditions for the good version, before the button appears. */}
       <motion.div
-        className="mt-14 flex flex-col items-center gap-3 text-chalk/55 sm:mt-16"
+        className="mt-12 flex flex-col items-center gap-7 text-chalk/55 sm:mt-14 sm:flex-row sm:gap-12"
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 1.2, delay: 1.15, ease }}
+        transition={{ duration: 1.2, delay: 1.5, ease }}
       >
-        <Headphones />
-        <motion.p
-          className="label text-[10px] text-chalk/45"
-          initial={{ opacity: 0, letterSpacing: '0.5em' }}
-          animate={{ opacity: 1, letterSpacing: '0.18em' }}
-          transition={{ duration: 1.6, delay: 2.2, ease }}
-        >
-          Headphones recommended
-        </motion.p>
+        <div className="flex flex-col items-center gap-3">
+          <Headphones />
+          <motion.p
+            className="label text-[10px] text-chalk/45"
+            initial={{ opacity: 0, letterSpacing: '0.5em' }}
+            animate={{ opacity: 1, letterSpacing: '0.18em' }}
+            transition={{ duration: 1.6, delay: 2.5, ease }}
+          >
+            Headphones recommended
+          </motion.p>
+        </div>
+
+        <div className="flex flex-col items-center gap-3">
+          <Screens />
+          <motion.p
+            className="label text-[10px] text-chalk/45"
+            initial={{ opacity: 0, letterSpacing: '0.5em' }}
+            animate={{ opacity: 1, letterSpacing: '0.18em' }}
+            transition={{ duration: 1.6, delay: 2.75, ease }}
+          >
+            Best on desktop and tablet
+          </motion.p>
+        </div>
       </motion.div>
 
       <motion.button
@@ -150,7 +285,7 @@ export default function Intro({ onBegin }) {
         className="group pointer-events-auto relative mt-12 overflow-hidden rounded-full border border-white/15 px-11 py-4 text-chalk transition-colors duration-500 hover:border-white/40 sm:mt-14"
         initial={{ opacity: 0, y: 20, filter: 'blur(8px)' }}
         animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-        transition={{ duration: 1.2, delay: 2.7, ease }}
+        transition={{ duration: 1.2, delay: 3.2, ease }}
         whileHover={{ scale: 1.025 }}
         whileTap={{ scale: 0.985 }}
       >
@@ -166,7 +301,7 @@ export default function Intro({ onBegin }) {
         className="mt-7 text-[0.8rem] font-light text-dim"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ duration: 1.4, delay: 3.4, ease }}
+        transition={{ duration: 1.4, delay: 3.9, ease }}
       >
         Takes about two minutes.
       </motion.p>

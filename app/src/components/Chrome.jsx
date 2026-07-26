@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion'
-import logo from '../assets/monopol-logo.svg'
+import MonopolMark from './MonopolMark'
 
 /**
  * The persistent frame: mark, progress, sound.
@@ -63,7 +63,7 @@ export default function Chrome({
         animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
         transition={{ duration: 1.1, delay: 0.35, ease: [0.16, 1, 0.3, 1] }}
       >
-        <img src={logo} alt="Monopol Colors" className="h-6 w-auto opacity-95 sm:h-8" />
+        <MonopolMark className="h-6 w-auto text-chalk opacity-95 sm:h-8" />
       </motion.div>
 
       {/* Start over + sound, top right */}

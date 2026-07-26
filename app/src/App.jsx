@@ -104,6 +104,11 @@ export default function App() {
     if (phase !== 'questions') audio.current.setAtmosphere(null)
   }, [phase])
 
+  // The room holds its tension until the colour exists, then settles.
+  useEffect(() => {
+    audio.current.setAtRest(['reveal', 'refine', 'finale'].includes(phase))
+  }, [phase])
+
   useEffect(() => () => audio.current?.dispose(), [])
 
   const play = useCallback((kind) => audio.current.tone(kind), [])
