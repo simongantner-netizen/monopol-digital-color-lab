@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.DS_Store
+*.local
+.vite/
+
+# Original licensed font files and print artwork stay out of the repo.
+# Only the subsetted web fonts the site actually serves are committed.
+Assets/
+*.otf
+*.ttf
+*.eps
+*.ai

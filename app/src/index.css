@@ -1,0 +1,178 @@
+@import 'tailwindcss';
+
+/* ---------------------------------------------------------------------------
+   Monopol Colors — brand type
+   Calibre carries everything. Summer Loving appears at most once per screen:
+   it is the human hand inside an otherwise clinical laboratory.
+--------------------------------------------------------------------------- */
+
+@font-face {
+  font-family: 'Calibre';
+  src: url('./fonts/Calibre-Thin.woff2') format('woff2');
+  font-weight: 200;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Calibre';
+  src: url('./fonts/Calibre-Light.woff2') format('woff2');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Calibre';
+  src: url('./fonts/Calibre-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Calibre';
+  src: url('./fonts/Calibre-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Calibre';
+  src: url('./fonts/Calibre-Semibold.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Summer Loving';
+  src: url('./fonts/SummerLoving-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@theme {
+  --font-sans: 'Calibre', ui-sans-serif, system-ui, sans-serif;
+  --font-accent: 'Summer Loving', cursive;
+
+  /* The laboratory is almost black — the only real colour is the one you make. */
+  --color-void: #08090a;
+  --color-shell: #0e1012;
+  --color-line: #1c1f22;
+  --color-chalk: #f4f3f1;
+  --color-ash: #8b8f94;
+  --color-dim: #5a5f65;
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out-soft: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+:root {
+  /* Live colour, written by the engine. Everything chromatic reads from here. */
+  --lab-colour: #6b6f74;
+  --lab-glow: #6b6f74;
+  color-scheme: dark;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-void);
+  color: var(--color-chalk);
+  font-family: var(--font-sans);
+  font-weight: 300;
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+/* Calibre's lining figures keep the lab codes on a stable grid. */
+.tnum {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* Optical correction: the script face sits high and reads small at equal size. */
+.accent {
+  font-family: var(--font-accent);
+  font-weight: 400;
+  font-size: 1.3em;
+  line-height: 0.85;
+  display: inline-block;
+  transform: translateY(0.05em);
+}
+
+.label {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+/*
+ * Film grain. background-size is not optional: an SVG with no intrinsic size
+ * stretches to fill the element, so a 260px noise tile blown up to 1440px
+ * turns fine grain into visible clumps — which land hardest on the one bright
+ * surface on screen, the colour panel. Tiled at source size it stays grain.
+ */
+.grain {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  opacity: 0.07;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+  background-repeat: repeat;
+}
+
+/* Vignette keeps the eye centred and stops the WebGL field feeling like a rug. */
+.vignette {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 92% 78% at 50% 48%,
+    transparent 40%,
+    rgb(8 9 10 / 0.5) 76%,
+    rgb(8 9 10 / 0.88) 100%
+  );
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+/* Scrolling exists on the long screens but should never be furniture. */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+::selection {
+  background: var(--lab-colour);
+  color: var(--color-void);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
