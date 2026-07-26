@@ -210,26 +210,40 @@ export default function Intro({ onBegin }) {
       </motion.p>
 
       <h1 className="max-w-[19ch] text-[clamp(2.6rem,7.2vw,6.4rem)] leading-[0.98] font-light tracking-[-0.028em] text-chalk">
+        {/*
+          The middle line stays in ash rather than taking the emphasis, even
+          though it carries the twist. Said quietly, "does not exist yet" is a
+          statement of fact from a manufacturer; said loudly it is a boast.
+
+          And the last word is "it", not "yours" — whatever noun the line above
+          ends on is what "yours" would attach to, which is how the previous
+          version ended up inviting people to design their questions.
+        */}
         <Line delay={0.55}>
-          <Word>Every</Word>
-          <Word delay={0.09}>
+          <Word>The</Word>
+          <Word delay={0.07}>
             <span className="accent">colour</span>
           </Word>
+          <Word delay={0.14}>you</Word>
+          <Word delay={0.2}>want</Word>
         </Line>
 
         <Line delay={0.78}>
-          <Word className="text-ash">begins</Word>
+          <Word className="text-ash">does</Word>
           <Word className="text-ash" delay={0.07}>
-            with
+            not
           </Word>
           <Word className="text-ash" delay={0.14}>
-            questions.
+            exist
+          </Word>
+          <Word className="text-ash" delay={0.2}>
+            yet.
           </Word>
         </Line>
 
         <Line delay={1.06}>
           <Word>Design</Word>
-          <Word delay={0.08}>yours.</Word>
+          <Word delay={0.08}>it.</Word>
         </Line>
       </h1>
 
