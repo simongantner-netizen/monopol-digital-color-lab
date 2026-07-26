@@ -126,17 +126,39 @@ function composeCode({ l, h }) {
  * so the curve is weighted there. Squaring keeps the low-gloss end readable.
  */
 export function materialParams({ colour, gloss, effect }) {
-  const roughness = clamp(Math.pow(1 - gloss, 1.55), 0.03, 0.98)
+  /*
+    The top of the gloss range is deliberately short of a mirror.
+
+    At roughness 0.03 with a full clearcoat the panel stops being a lacquer and
+    becomes a reflector: it hands back the studio softbox at almost full
+    strength and, at the angle the panel happens to be tilted, the highlight
+    covers most of its face. The colour disappears behind its own shine — which
+    is the one failure a paint manufacturer cannot ship.
+
+    A real high-gloss lacquer on a wall always shows its pigment plus a
+    highlight. Holding the floor at 0.075, capping the clearcoat below full and
+    easing off the reflection strength keeps the shine convincing at maximum
+    while leaving the colour legible from every angle.
+  */
+  const roughness = clamp(Math.pow(1 - gloss, 1.55), 0.09, 0.98)
 
   const base = {
     roughness,
     metalness: 0.0,
-    clearcoat: clamp((gloss - 0.45) * 1.8, 0, 1),
-    clearcoatRoughness: clamp(0.35 - gloss * 0.3, 0.02, 0.4),
+    // One coat, not two. A wall lacquer is single-layer; the clearcoat here is
+    // modelling the depth of that layer, not a second mirror on top of it.
+    clearcoat: clamp((gloss - 0.45) * 1.0, 0, 0.55),
+    // Below about 0.1 the softbox reflects with a hard rectangular edge, which
+    // is what makes it read as a mirror rather than as a highlight.
+    clearcoatRoughness: clamp(0.35 - gloss * 0.21, 0.14, 0.4),
     iridescence: 0,
     iridescenceIOR: 1.3,
     sheen: 0,
-    envMapIntensity: 0.75 + gloss * 0.85,
+    // Clamped rather than given a flatter slope on purpose: envMapIntensity
+    // scales the diffuse image-based light as well as the reflection, so
+    // lowering the slope would darken the matt finishes too. The ceiling only
+    // bites above gloss 0.47 — matt and silk stay exactly as they were.
+    envMapIntensity: clamp(0.75 + gloss * 0.85, 0.75, 1.15),
     flake: 0,
   }
 

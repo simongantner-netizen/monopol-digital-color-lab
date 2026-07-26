@@ -1,36 +1,58 @@
-import { motion } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
 
 /**
  * The Monopol mark, inline so the two centre bars can move.
  *
- * The bars are the only part that animates: every so often they slide past
- * each other and swap sides, one dipping and one rising so the crossing reads
- * as a crossing rather than a glitch. Everything else — the frame and the
- * wordmark — is the original artwork, untouched.
+ * The motion is Monopol's own. On monopol-colors.ch the two bars swap places
+ * on hover: a purely horizontal translation of exactly the centre-to-centre
+ * distance, both bars moving at once, over half a second. Because the travel
+ * is exact, each bar lands in the other's slot and the end state is identical
+ * to the start — the only thing you ever see is the movement itself. And
+ * because both move together at the same speed, they superimpose into a single
+ * bar at the centre of the arch halfway through, then part again.
  *
- * Paths come straight from the supplied EPS; the logo is never redrawn.
+ * Two things are deliberately different here. The site only does this on
+ * hover; a logo sitting in the corner of a two-minute experience needs to
+ * play by itself, so it loops. And the site leaves the browser's default
+ * `ease` curve in place, which puts the merge at 29% of the move rather than
+ * the middle; a symmetric curve lands it on the beat, which is what makes the
+ * two-become-one read as intended rather than as a rendering fault.
+ *
+ * Nothing else moves. No vertical drift, no scaling — the frame and the
+ * wordmark are the original artwork and stay perfectly still. Paths come
+ * straight from the supplied EPS; the logo is never redrawn.
  */
 
-// Centres of the two bars in the artwork's own coordinates.
+// Centres of the two bars in the artwork's own coordinates. The travel has to
+// be exactly this — a bar that lands short of its neighbour's slot turns a
+// swap into a wobble.
 const BAR_1_CENTRE = 21.56
 const BAR_2_CENTRE = 36.02
 const TRAVEL = BAR_2_CENTRE - BAR_1_CENTRE
 
-/** One swap, then a long pause before the next. */
+const MOVE = 0.5 // seconds per traversal — Monopol's own number
+const HOLD = 3.5 // and long enough after it that the mark stays quiet
+const CYCLE = (MOVE + HOLD) * 2 // out, wait, back, wait
+
+/** Swapped, held, swapped back, held — forever. */
 const swap = (direction) => ({
-  x: [0, direction * TRAVEL, direction * TRAVEL],
-  y: [0, direction * -2.6, 0],
+  x: [0, direction * TRAVEL, direction * TRAVEL, 0, 0],
   transition: {
-    duration: 9,
-    times: [0, 0.13, 0.2],
+    duration: CYCLE,
+    // Only the two move segments are short; the rest of the cycle is the mark
+    // standing still. Holding on identical values means the easing cannot
+    // make the bars creep during the pause.
+    times: [0, MOVE / CYCLE, 0.5, 0.5 + MOVE / CYCLE, 1],
     repeat: Infinity,
-    repeatType: 'reverse',
-    repeatDelay: 2.4,
     ease: [0.65, 0, 0.35, 1],
   },
 })
 
 export default function MonopolMark({ className = '', animate = true }) {
+  // Someone who has asked their system for less motion should get a still logo.
+  const still = useReducedMotion()
+  const moving = animate && !still
+
   return (
     <svg
       viewBox="0 0 249.84 56.69"
@@ -47,11 +69,11 @@ export default function MonopolMark({ className = '', animate = true }) {
       <motion.path
         d="M 17.949219 56.382812 L 25.175781 56.382812 L 25.175781 17.347656 L 17.949219 17.347656 L 17.949219
         56.382812"
-        animate={animate ? swap(1) : undefined}
+        animate={moving ? swap(1) : undefined}
       />
       <motion.path
         d="M 32.40625 56.382812 L 39.632812 56.382812 L 39.632812 17.347656 L 32.40625 17.347656 L 32.40625 56.382812"
-        animate={animate ? swap(-1) : undefined}
+        animate={moving ? swap(-1) : undefined}
       />
 
       {/* Wordmark */}

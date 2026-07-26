@@ -25,7 +25,11 @@ const rise = {
   }),
 }
 
-export default function Reveal({ formula, answers, onRefine, onRename }) {
+/** Deep-equal enough for three numbers that all come from the same table. */
+const sameTweak = (a, b) =>
+  !!a && !!b && a.hue === b.hue && a.lightness === b.lightness && a.chroma === b.chroma
+
+export default function Reveal({ formula, answers, tweaks, onRefine, onRename, onPick }) {
   // The recipe, in the order it was mixed.
   const recipe = [
     getOption('world', answers.world),
@@ -48,10 +52,31 @@ export default function Reveal({ formula, answers, onRefine, onRename }) {
       [
         { hue: -28, lightness: -0.11, chroma: 0.035 },
         { hue: -14, lightness: 0.09, chroma: 0.015 },
+        null, // the colour exactly as the answers mixed it
         { hue: 15, lightness: -0.09, chroma: 0.015 },
         { hue: 29, lightness: 0.11, chroma: 0.035 },
-      ].map((t) => composeFormula(answers, { ...t, gloss: null, effect: null }).css),
+      ].map((t) => ({
+        tweak: t,
+        // All three axes have to be present as numbers. Leaving one undefined
+        // reaches the engine as arithmetic on undefined, and the NaN comes out
+        // the far end as an unparseable rgb() — a swatch that is simply not
+        // there, with nothing logged to say why.
+        css: composeFormula(answers, {
+          hue: 0,
+          lightness: 0,
+          chroma: 0,
+          ...(t ?? {}),
+          gloss: null,
+          effect: null,
+        }).css,
+      })),
     [answers],
+  )
+
+  // Which of the five is currently on the panel. Null tweaks mean the middle
+  // one, which is why an explicit index beats comparing against the formula.
+  const active = neighbours.findIndex(({ tweak }) =>
+    tweak ? sameTweak(tweak, tweaks) : !tweaks?.hue && !tweaks?.lightness && !tweaks?.chroma,
   )
 
   return (
@@ -118,25 +143,41 @@ export default function Reveal({ formula, answers, onRefine, onRename }) {
         >
           <p className="label mb-3.5 text-[10px] text-dim">This is a starting point</p>
 
-          <div className="flex items-center gap-2">
-            {neighbours.slice(0, 2).map((css, i) => (
-              <span
-                key={i}
-                className="block size-5 rounded-full opacity-45 sm:size-6"
-                style={{ background: css }}
-              />
-            ))}
-            <span
-              className="block size-9 rounded-full ring-1 ring-white/25 sm:size-11"
-              style={{ background: formula.css, boxShadow: `0 0 30px -4px ${formula.css}` }}
-            />
-            {neighbours.slice(2).map((css, i) => (
-              <span
-                key={i}
-                className="block size-5 rounded-full opacity-45 sm:size-6"
-                style={{ background: css }}
-              />
-            ))}
+          {/*
+            Five colours you can actually have, not five illustrations of the
+            idea that colours exist. They were already doing the persuading —
+            showing what the colour could become is what makes people press
+            Adjust — so letting them be taken is the smaller change: you switch
+            in one click and still tune from wherever you land.
+
+            They are also drawn big enough to read now. At twenty pixels and
+            45% opacity you could tell there were dots; you could not tell which
+            way any of them went, which is the only thing they are for.
+          */}
+          <div className="pointer-events-auto flex items-center gap-2.5">
+            {neighbours.map(({ tweak, css }, i) => {
+              const isCentre = tweak === null
+              const isActive = i === active
+              return (
+                <motion.button
+                  key={i}
+                  type="button"
+                  onClick={() => onPick(tweak)}
+                  aria-label={isCentre ? 'The colour as mixed' : `Variation ${i + 1}`}
+                  aria-pressed={isActive}
+                  className={`block rounded-full transition-[box-shadow,opacity] duration-500 ${
+                    isCentre ? 'size-11 sm:size-14' : 'size-8 sm:size-10'
+                  } ${isActive ? 'opacity-100 ring-1 ring-white/50' : 'opacity-70 hover:opacity-100'}`}
+                  style={{
+                    background: css,
+                    boxShadow: isActive ? `0 0 30px -4px ${css}` : 'none',
+                  }}
+                  whileHover={{ scale: 1.12 }}
+                  whileTap={{ scale: 0.94 }}
+                  transition={{ duration: 0.4, ease }}
+                />
+              )
+            })}
           </div>
         </motion.div>
 
@@ -153,7 +194,7 @@ export default function Reveal({ formula, answers, onRefine, onRename }) {
           whileTap={{ scale: 0.985 }}
         >
           <span className="absolute inset-0 bg-white opacity-0 transition-opacity duration-500 group-hover:opacity-15" />
-          <span className="label relative text-[11px]">Adjust this colour</span>
+          <span className="label relative text-[11px]">Give it your final twist</span>
         </motion.button>
 
         {/* No explanatory line under the button — "Adjust this colour" on a

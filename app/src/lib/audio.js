@@ -1,22 +1,37 @@
 /**
- * Procedural sound design.
+ * Sound design.
  *
- * Everything is synthesised in the browser — no audio files, nothing to load,
- * nothing to license. The point is that the colour is audible: hue picks the
- * root note, chroma opens the filter, lightness lifts the register. Move the
- * colour and the room changes pitch with it.
+ * Four things sound at once, and the whole job is keeping them out of each
+ * other's way:
  *
- * Kept deliberately quiet. This should sit under the experience, not on it.
+ *   the bed        a low drone under everything, the floor of the room
+ *   the colour     a synthesised pad tuned to the colour on screen
+ *   the world      a field recording, only while a pointer rests on a card
+ *   the voice      the question, read aloud
+ *
+ * The rule throughout is that nothing announces itself. Levels are set so that
+ * removing any single layer would be noticed as the room going flat rather
+ * than as a sound stopping, and every entrance and exit is faded — a sample
+ * that starts on its first sample sounds like a sound file, which is exactly
+ * what it must not sound like.
+ *
+ * The colour is still audible: hue picks the pad's root note, and chroma tilts
+ * the whole room brighter or darker. Move the colour and the room changes with
+ * it. The pad sits far under the bed now that there is real music to carry the
+ * floor — it reads as a tint on the room rather than as a second drone, which
+ * is the only way two drones can share a mix without fighting.
  */
 
 import { getAtmosphere } from './atmospheres.js'
+import { BED_URLS, LOOP_SECONDS, MUSIC_URL, VOICE_URLS } from './audioAssets.js'
 
 // A pentatonic set has no semitone clashes, so any two voices sounding together
 // stay consonant however the colour moves. Degrees in semitones from the root.
 const PENTATONIC = [0, 2, 4, 7, 9]
-const ROOT_HZ = 55 // A1 — the drone lives low
+const ROOT_HZ = 55 // A1 — the pad lives low
 
 const semitone = (n) => Math.pow(2, n / 12)
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v))
 
 /** Hue → a scale degree, so neighbouring colours are neighbouring notes. */
 function hueToRatio(hue) {
@@ -27,8 +42,8 @@ function hueToRatio(hue) {
 }
 
 /**
- * Looping white noise, generated once and shared by every atmosphere.
- * Four seconds is long enough that the loop point is inaudible under a filter.
+ * Looping white noise, generated once. Only the fallback atmospheres use it —
+ * see `atmospheres.js` for when those come into play.
  */
 function makeNoiseBuffer(ctx, seconds = 4) {
   const length = ctx.sampleRate * seconds
@@ -55,12 +70,66 @@ function makeReverb(ctx, seconds = 3.6, decay = 2.6) {
   return convolver
 }
 
+/**
+ * Cut a decoded file back to exactly the loop it was made from.
+ *
+ * MP3 decodes to slightly more audio than went in: a few milliseconds of
+ * silent encoder padding at the head, and whether a browser strips it is not
+ * standardised — Firefox only started before version 83, Chromium is off by a
+ * sample, Safari does its own thing. A loop that runs into that padding ticks
+ * once per cycle, which on a twelve-second atmosphere is five ticks a minute.
+ *
+ * Rather than guess per browser: every one of these files begins on real
+ * sound, so any leading silence *is* the padding. Find where the sound starts,
+ * copy exactly the authored number of seconds from there into a fresh buffer,
+ * and the loop is sample-exact everywhere.
+ */
+function trimToLoop(ctx, buffer, seconds) {
+  const wanted = Math.round(seconds * buffer.sampleRate)
+  if (!wanted || buffer.length < wanted) return buffer
+
+  // Encoder padding is digital silence; the material never is.
+  let start = 0
+  const scan = Math.min(buffer.length - wanted, 8192)
+  const channels = []
+  for (let c = 0; c < buffer.numberOfChannels; c++) channels.push(buffer.getChannelData(c))
+  outer: for (let i = 0; i < scan; i++) {
+    for (let c = 0; c < channels.length; c++) {
+      if (Math.abs(channels[c][i]) > 1e-4) {
+        start = i
+        break outer
+      }
+    }
+  }
+
+  const exact = ctx.createBuffer(buffer.numberOfChannels, wanted, buffer.sampleRate)
+  for (let c = 0; c < buffer.numberOfChannels; c++) {
+    exact.getChannelData(c).set(channels[c].subarray(start, start + wanted))
+  }
+  return exact
+}
+
+/**
+ * Retarget a parameter that may already be mid-ramp.
+ *
+ * Firefox has never shipped cancelAndHoldAtTime, so cancelling a running ramp
+ * there snaps the value back to wherever the last scheduled point was — an
+ * audible jump in the middle of a fade. Reading the live value and pinning it
+ * before cancelling works identically in every browser.
+ */
+function glide(param, to, when, timeConstant) {
+  const held = param.value
+  param.cancelScheduledValues(when)
+  param.setValueAtTime(held, when)
+  param.setTargetAtTime(to, when, timeConstant)
+}
+
 export function createAudioEngine() {
   let ctx = null
-  let master = null
-  let ambientGain = null
+  let master = null // everything, and the mute
+  let programme = null // everything except the voice — this is what ducks
   let reverb = null
-  let filter = null
+  let filter = null // the pad's lowpass; chroma opens it
   let voices = []
   let started = false
   let muted = false
@@ -68,24 +137,121 @@ export function createAudioEngine() {
 
   let noiseBuffer = null
   let atmosphereBus = null
-  let atmosphere = null // { id, nodes, stop() }
+  let atmosphere = null // { id, gain, teardown() }
+
+  let musicBus = null
+  let musicTone = null // high shelf — the colour's brightness on the music
+  let musicSource = null
+  let musicGain = null
+  let tempo = 1 // wanted playback rate, remembered until the music exists
+  let intensity = 0.34 // 0 whisper … 1 shout; the neutral answer sits here
+
+  let voiceBus = null
+  let voiceSource = null
+  let unduckTimer = null
+
+  /** name → AudioBuffer, once decoded. Missing means "not ready, use the fallback". */
+  const beds = new Map()
+  const spoken = new Map()
+  let musicBuffer = null
+
+  /** url → Promise<ArrayBuffer>, started during the intro. */
+  let downloads = null
 
   /**
    * Whether the search is over.
    *
-   * Through the questions the drone tracks the colour and climbs — each answer
+   * Through the questions the room tracks the colour and climbs — each answer
    * pushes it somewhere new, and that rising tension is what makes the wait
    * before the reveal work. Once the colour exists, holding that tension would
-   * be wrong: the room drops an octave, the filter closes, and the whole thing
-   * exhales. Resolution, not suspense.
+   * be wrong: the room drops an octave, the filter closes, the music falls
+   * back to its own pace, and the whole thing exhales.
    */
   let atRest = false
 
-  // The drone sits well under the interaction tones — it should be felt as
-  // room rather than heard as a note.
-  const AMBIENT_LEVEL = 0.042
   const MASTER_LEVEL = 0.62
-  const ATMOSPHERE_LEVEL = 0.5
+  const MUSIC_LEVEL = 0.5
+  const ATMOSPHERE_LEVEL = 0.3
+  const VOICE_LEVEL = 0.62
+  // The pad is a tint on the music, not a drone of its own. Set this to 0 and
+  // the room still works; it just stops changing colour with the screen.
+  const AMBIENT_LEVEL = 0.017
+  // How far everything else drops while the question is being read. Enough to
+  // hear every word over, gentle enough that nobody notices it happening.
+  const DUCK = 0.42
+
+  /* ---------------------------------------------------------------------
+     Loading. Nothing here needs an AudioContext, so it can run on the intro
+     screen — before the visitor has clicked anything, and therefore before a
+     browser would let us make a sound.
+  --------------------------------------------------------------------- */
+
+  function prefetch() {
+    if (downloads) return
+    downloads = new Map()
+    const want = [
+      MUSIC_URL,
+      ...Object.values(BED_URLS),
+      ...Object.values(VOICE_URLS),
+    ]
+    want.forEach((url) => {
+      downloads.set(
+        url,
+        fetch(url)
+          .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(r.status))))
+          // A missing file must never break the room: the fallbacks cover the
+          // atmospheres, and the music and voice simply do not play.
+          .catch(() => null),
+      )
+    })
+  }
+
+  async function decode(url, loopKey) {
+    if (!downloads) prefetch()
+    const bytes = await downloads.get(url)
+    if (!bytes || !ctx) return null
+    try {
+      // decodeAudioData detaches the buffer, and a retry would find it empty.
+      const raw = await ctx.decodeAudioData(bytes.slice(0))
+      return loopKey ? trimToLoop(ctx, raw, LOOP_SECONDS[loopKey]) : raw
+    } catch {
+      return null
+    }
+  }
+
+  /** Pull everything in, letting each part start sounding the moment it can. */
+  function load() {
+    decode(MUSIC_URL, 'music').then((buffer) => {
+      if (!buffer || !started) return
+      musicBuffer = buffer
+      startMusic()
+    })
+
+    Object.entries(BED_URLS).forEach(([name, url]) => {
+      decode(url, name).then((buffer) => {
+        if (!buffer) return
+        beds.set(name, buffer)
+        // If this bed belongs to the world already under the pointer, the
+        // synthesised stand-in is playing — swap it for the real thing.
+        if (atmosphere?.synthetic && atmosphere.id) {
+          const spec = getAtmosphere(atmosphere.id)
+          if (spec?.layers?.some((l) => l.bed === name)) {
+            const id = atmosphere.id
+            stopAtmosphere()
+            setAtmosphere(id)
+          }
+        }
+      })
+    })
+
+    Object.entries(VOICE_URLS).forEach(([id, url]) => {
+      decode(url).then((buffer) => buffer && spoken.set(id, buffer))
+    })
+  }
+
+  /* ---------------------------------------------------------------------
+     The graph.
+  --------------------------------------------------------------------- */
 
   function build() {
     ctx = new (window.AudioContext || window.webkitAudioContext)()
@@ -94,35 +260,54 @@ export function createAudioEngine() {
     master.gain.value = 0
     master.connect(ctx.destination)
 
+    // Everything but the voice hangs off here, so one gain ducks the lot.
+    programme = ctx.createGain()
+    programme.gain.value = 1
+    programme.connect(master)
+
     reverb = makeReverb(ctx)
     const wet = ctx.createGain()
     wet.gain.value = 0.42
     reverb.connect(wet)
-    wet.connect(master)
+    wet.connect(programme)
 
     filter = ctx.createBiquadFilter()
     filter.type = 'lowpass'
     filter.frequency.value = 520
     filter.Q.value = 0.6
-    filter.connect(master)
+    filter.connect(programme)
     filter.connect(reverb)
 
-    ambientGain = ctx.createGain()
-    ambientGain.gain.value = 0
-    ambientGain.connect(filter)
+    // The music keeps its own top end — a lowpass at 520 Hz would bury it —
+    // but a shelf lets the colour tilt it warm or bright all the same.
+    musicTone = ctx.createBiquadFilter()
+    musicTone.type = 'highshelf'
+    musicTone.frequency.value = 1400
+    musicTone.gain.value = 0
+    musicTone.connect(programme)
 
-    // Atmospheres bypass the drone's lowpass — a rain texture needs its highs.
+    musicBus = ctx.createGain()
+    musicBus.gain.value = MUSIC_LEVEL * (0.78 + intensity * 0.52)
+    musicBus.connect(musicTone)
+
+    // Atmospheres bypass the pad's lowpass — a rain texture needs its highs.
     // They still go through the reverb, so they sit in the same room.
     noiseBuffer = makeNoiseBuffer(ctx)
     atmosphereBus = ctx.createGain()
     atmosphereBus.gain.value = ATMOSPHERE_LEVEL
-    atmosphereBus.connect(master)
+    atmosphereBus.connect(programme)
     const atmoSend = ctx.createGain()
     atmoSend.gain.value = 0.3
     atmosphereBus.connect(atmoSend)
     atmoSend.connect(reverb)
 
-    // Root, fifth, octave — plus a slow detune so the drone never sits still.
+    // The voice is dry and sits past the duck. Putting it in the room's reverb
+    // would push it away, and the whole point is that it is close.
+    voiceBus = ctx.createGain()
+    voiceBus.gain.value = VOICE_LEVEL
+    voiceBus.connect(master)
+
+    // Root, fifth, octave — plus a slow detune so the pad never sits still.
     voices = [
       { mult: 1, level: 1.0, detune: 0 },
       { mult: semitone(7), level: 0.55, detune: 3 },
@@ -145,7 +330,7 @@ export function createAudioEngine() {
       lfoGain.connect(gain.gain)
 
       osc.connect(gain)
-      gain.connect(ambientGain)
+      gain.connect(filter)
       osc.start()
       lfo.start()
 
@@ -160,25 +345,123 @@ export function createAudioEngine() {
     if (ctx.state === 'suspended') await ctx.resume()
     started = true
 
+    // Otherwise the ring/silent switch on an iPad mutes Web Audio — and the
+    // room would be silent at exactly the moment somebody is being shown it.
+    try {
+      if ('audioSession' in navigator) navigator.audioSession.type = 'playback'
+    } catch {
+      /* older Safari, and every other browser */
+    }
+    watchInterruptions()
+
     const now = ctx.currentTime
     master.gain.cancelScheduledValues(now)
     master.gain.setValueAtTime(0, now)
     master.gain.linearRampToValueAtTime(muted ? 0 : MASTER_LEVEL, now + 2.4)
-    ambientGain.gain.setValueAtTime(0, now)
-    ambientGain.gain.linearRampToValueAtTime(1, now + 3.2)
 
     applyColour(0.5)
+    load()
   }
 
   function setMuted(next) {
     muted = next
     if (!ctx || !started) return
-    const now = ctx.currentTime
-    master.gain.cancelScheduledValues(now)
-    master.gain.setTargetAtTime(muted ? 0 : MASTER_LEVEL, now, 0.25)
+    glide(master.gain, muted ? 0 : MASTER_LEVEL, ctx.currentTime, 0.25)
   }
 
-  /** Retune the drone to the current colour. */
+  /**
+   * Come back after the browser takes the audio away.
+   *
+   * Safari suspends the context for a phone call, for Siri, for the screen
+   * going off, and reports a state — "interrupted" — that is not in the spec.
+   * Without this the room simply never returns, halfway through a pitch.
+   */
+  function watchInterruptions() {
+    const revive = () => {
+      if (ctx && started && ctx.state !== 'running') ctx.resume().catch(() => {})
+    }
+    ctx.addEventListener?.('statechange', revive)
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) revive()
+    })
+  }
+
+  /* ---------------------------------------------------------------------
+     The music bed.
+  --------------------------------------------------------------------- */
+
+  /**
+   * A looping source that enters somewhere other than its first sample.
+   *
+   * Two worlds sharing a recording would otherwise start on the same gust of
+   * wind, and hovering between them would give the trick away.
+   */
+  function loopSource(buffer, { rate = 1, at = 0 } = {}) {
+    const source = ctx.createBufferSource()
+    source.buffer = buffer
+    source.loop = true
+    // The buffer is already exactly the loop — trimToLoop saw to that — so the
+    // whole of it is the loop, with nothing to skip at either end.
+    source.loopStart = 0
+    source.loopEnd = buffer.duration
+    source.playbackRate.value = rate
+    source.start(ctx.currentTime, at % buffer.duration)
+    return source
+  }
+
+  function startMusic() {
+    if (!musicBuffer || musicSource) return
+    const now = ctx.currentTime
+
+    musicGain = ctx.createGain()
+    musicGain.gain.value = 0
+    musicGain.connect(musicBus)
+
+    musicSource = loopSource(musicBuffer)
+    musicSource.playbackRate.value = tempo
+    musicSource.connect(musicGain)
+
+    // Long enough that nobody catches it arriving.
+    musicGain.gain.setTargetAtTime(1, now, 1.6)
+  }
+
+  /**
+   * How hard the room is pushing.
+   *
+   * Each answer winds the music up a little. It is the same recording playing
+   * faster, so it also rises in pitch, and the two together are what makes the
+   * last question feel further from the first than four screens should. At
+   * rest it unwinds — slower than it wound up, because letting go should take
+   * longer than tensing.
+   */
+  function setTempo(next) {
+    tempo = next
+    if (!musicSource) return
+    // Unwinding is given more than twice the time of winding up.
+    glide(musicSource.playbackRate, next, ctx.currentTime, next < 1.001 ? 1.6 : 0.7)
+  }
+
+  /**
+   * How loud the colour is.
+   *
+   * Question 02 asks whether the colour should whisper or be heard from across
+   * the street, and until now that only moved a chroma multiplier — the one
+   * question about volume was the one question you could not hear. So the bed
+   * comes up with it. Deliberately a narrow range: whisper to shout is about
+   * four and a half decibels, enough to feel the answer land while hovering,
+   * not enough to make Shout tiring by the fourth question. It stays where the
+   * answer left it, because a loud colour is loud for the rest of the visit.
+   */
+  function setIntensity(v) {
+    intensity = clamp(v, 0, 1)
+    if (!musicBus || !started) return
+    glide(musicBus.gain, MUSIC_LEVEL * (0.78 + intensity * 0.52), ctx.currentTime, 0.45)
+  }
+
+  /* ---------------------------------------------------------------------
+     The colour.
+  --------------------------------------------------------------------- */
+
   function applyColour(glide = 2.2) {
     if (!ctx || !started) return
     const now = ctx.currentTime
@@ -196,6 +479,11 @@ export function createAudioEngine() {
     // Resting closes it down: less air, more body.
     const cutoff = (340 + colour.c * 3600 + colour.l * 420) * (atRest ? 0.62 : 1)
     filter.frequency.setTargetAtTime(cutoff, now, glide * 0.6)
+
+    // The same idea on the music, in the only currency a finished recording
+    // has: how much of its top is let through.
+    const tilt = clamp(-6 + colour.c * 42, -6, 4) + (atRest ? -1.5 : 0)
+    musicTone.gain.setTargetAtTime(tilt, now, glide * 0.6)
   }
 
   function setColour(next) {
@@ -203,10 +491,6 @@ export function createAudioEngine() {
     applyColour()
   }
 
-  /**
-   * Resolve or re-tension the room. Called when the colour is revealed, and
-   * again if the visitor goes back to the questions.
-   */
   function setAtRest(next) {
     if (atRest === next) return
     atRest = next
@@ -215,11 +499,10 @@ export function createAudioEngine() {
     applyColour(3.4)
   }
 
-  /**
-   * One-shot tones. Each is a short sine with a fast attack and a long tail
-   * into the reverb, tuned relative to the current colour so the interface
-   * always sounds in key with what is on screen.
-   */
+  /* ---------------------------------------------------------------------
+     One-shot tones.
+  --------------------------------------------------------------------- */
+
   function tone(kind = 'select') {
     if (!ctx || !started || muted) return
     const now = ctx.currentTime
@@ -254,17 +537,72 @@ export function createAudioEngine() {
   }
 
   /* ---------------------------------------------------------------------
+     The voice.
+  --------------------------------------------------------------------- */
+
+  function unduck(after = 0) {
+    clearTimeout(unduckTimer)
+    unduckTimer = setTimeout(() => {
+      if (!ctx) return
+      glide(programme.gain, 1, ctx.currentTime, 0.5)
+    }, after * 1000)
+  }
+
+  /**
+   * Read a question aloud, and get out of its way while it speaks.
+   *
+   * The duck lifts a beat after the last word rather than on it, so the room
+   * comes back as if it had been waiting politely instead of snapping on.
+   */
+  function speak(questionId) {
+    if (!ctx || !started) return
+    const buffer = spoken.get(questionId)
+
+    silence()
+    if (!buffer) return
+
+    const now = ctx.currentTime
+    voiceSource = ctx.createBufferSource()
+    voiceSource.buffer = buffer
+
+    const gain = ctx.createGain()
+    gain.gain.setValueAtTime(0, now)
+    gain.gain.linearRampToValueAtTime(1, now + 0.12)
+    voiceSource.connect(gain)
+    gain.connect(voiceBus)
+    voiceSource.start(now)
+    voiceSource.envelope = gain
+
+    clearTimeout(unduckTimer)
+    glide(programme.gain, DUCK, now, 0.22)
+    unduck(buffer.duration + 0.45)
+  }
+
+  /** Cut the voice short — used when the visitor moves on mid-sentence. */
+  function silence() {
+    if (!voiceSource) return
+    const dying = voiceSource
+    voiceSource = null
+    const now = ctx.currentTime
+    try {
+      glide(dying.envelope.gain, 0, now, 0.06)
+      dying.stop(now + 0.4)
+    } catch {
+      /* already finished */
+    }
+    unduck(0.3)
+  }
+
+  /* ---------------------------------------------------------------------
      Atmospheres — one per world, faded in on hover.
   --------------------------------------------------------------------- */
 
-  function stopAtmosphere(fade = 0.55) {
+  function stopAtmosphere(fade = 0.9) {
     if (!atmosphere) return
     const dying = atmosphere
     atmosphere = null
 
-    const now = ctx.currentTime
-    dying.gain.gain.cancelScheduledValues(now)
-    dying.gain.gain.setTargetAtTime(0, now, fade / 3)
+    glide(dying.gain.gain, 0, ctx.currentTime, fade / 3)
     clearTimeout(dying.grainTimer)
     // Let the tail run out before tearing the nodes down.
     setTimeout(() => dying.teardown(), fade * 1000 + 400)
@@ -285,14 +623,66 @@ export function createAudioEngine() {
     const spec = getAtmosphere(worldId)
     if (!spec) return
 
-    const now = ctx.currentTime
-    const nodes = []
-
     const gain = ctx.createGain()
     gain.gain.value = 0
     gain.connect(atmosphereBus)
 
-    // The bed: looping noise through one shaped filter.
+    const ready = spec.layers?.filter((l) => beds.has(l.bed)) ?? []
+    const entry = ready.length
+      ? fromRecordings(worldId, ready, gain)
+      : fromNoise(worldId, spec.fallback, gain)
+
+    // In quickly enough that a hover feels answered, but never on the beat.
+    gain.gain.setTargetAtTime(1, ctx.currentTime, 0.22)
+    atmosphere = entry
+  }
+
+  /** The real thing: field recordings, one filter each. */
+  function fromRecordings(worldId, layers, gain) {
+    const nodes = []
+
+    layers.forEach((layer) => {
+      const source = loopSource(beds.get(layer.bed), {
+        rate: layer.rate ?? 1,
+        at: layer.at ?? 0,
+      })
+
+      const band = ctx.createBiquadFilter()
+      band.type = layer.band
+      band.frequency.value = layer.freq
+      band.Q.value = layer.q
+
+      const level = ctx.createGain()
+      level.gain.value = layer.gain
+
+      source.connect(band)
+      band.connect(level)
+      level.connect(gain)
+      nodes.push(source)
+    })
+
+    return {
+      id: worldId,
+      gain,
+      synthetic: false,
+      grainTimer: null,
+      teardown: () => teardown(nodes, gain),
+    }
+  }
+
+  /**
+   * The stand-in, for the seconds before the recordings land — or the whole
+   * session, if they never do.
+   *
+   * Almost every natural ambience *is* filtered noise: what separates surf
+   * from desert wind from rain is which frequencies survive, how slowly the
+   * filter breathes, and whether there are transients on top.
+   */
+  function fromNoise(worldId, spec, gain) {
+    if (!spec) return { id: worldId, gain, synthetic: true, teardown: () => gain.disconnect() }
+    const now = ctx.currentTime
+    const nodes = []
+
     const source = ctx.createBufferSource()
     source.buffer = noiseBuffer
     source.loop = true
@@ -302,13 +692,16 @@ export function createAudioEngine() {
     band.frequency.value = spec.freq
     band.Q.value = spec.q
 
+    const level = ctx.createGain()
+    level.gain.value = spec.gain
+
     source.connect(band)
-    band.connect(gain)
+    band.connect(level)
+    level.connect(gain)
     source.start()
     nodes.push(source)
 
-    // The breathing: a slow LFO on the filter is what turns flat hiss into
-    // surf, or wind, or rain.
+    // A slow LFO on the filter is what turns flat hiss into surf, or wind.
     const lfo = ctx.createOscillator()
     lfo.type = 'sine'
     lfo.frequency.value = spec.sway
@@ -327,27 +720,17 @@ export function createAudioEngine() {
       const toneGain = ctx.createGain()
       toneGain.gain.value = spec.tone.gain
       osc.connect(toneGain)
-      toneGain.connect(gain)
+      toneGain.connect(level)
       osc.start()
       nodes.push(osc)
     }
 
-    gain.gain.setTargetAtTime(spec.gain, now, 0.25)
-
     const entry = {
       id: worldId,
       gain,
+      synthetic: true,
       grainTimer: null,
-      teardown() {
-        nodes.forEach((n) => {
-          try {
-            n.stop()
-          } catch {
-            /* already stopped */
-          }
-        })
-        gain.disconnect()
-      },
+      teardown: () => teardown(nodes, gain),
     }
 
     /**
@@ -362,7 +745,7 @@ export function createAudioEngine() {
         if (atmosphere !== entry) return
         const t = ctx.currentTime
         while (next < t + 0.25) {
-          spawnGrain(spec.grain, next, gain)
+          spawnGrain(spec.grain, next, level)
           next += (1 / spec.grain.rate) * (0.45 + Math.random() * 1.1)
         }
         entry.grainTimer = setTimeout(tick, 120)
@@ -370,7 +753,18 @@ export function createAudioEngine() {
       tick()
     }
 
-    atmosphere = entry
+    return entry
+  }
+
+  function teardown(nodes, gain) {
+    nodes.forEach((n) => {
+      try {
+        n.stop()
+      } catch {
+        /* already stopped */
+      }
+    })
+    gain.disconnect()
   }
 
   function spawnGrain(grain, at, destination) {
@@ -397,6 +791,7 @@ export function createAudioEngine() {
   }
 
   function dispose() {
+    clearTimeout(unduckTimer)
     stopAtmosphere(0)
     if (!ctx) return
     voices.forEach(({ osc }) => {
@@ -406,17 +801,27 @@ export function createAudioEngine() {
         /* already stopped */
       }
     })
+    try {
+      musicSource?.stop()
+    } catch {
+      /* already stopped */
+    }
     ctx.close()
     ctx = null
     started = false
   }
 
   return {
+    prefetch,
     start,
     setMuted,
     setColour,
     setAtRest,
     setAtmosphere,
+    setTempo,
+    setIntensity,
+    speak,
+    silence,
     tone,
     dispose,
     get isStarted() {

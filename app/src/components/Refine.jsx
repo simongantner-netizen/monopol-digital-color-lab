@@ -27,7 +27,16 @@ function useTrackGradient(base, key, min, max, tweaks, steps = 9) {
   }, [base, key, min, max, tweaks, steps])
 }
 
-export default function Refine({ formula, tweaks, setTweaks, onTick, onSelect, onDone, answers }) {
+export default function Refine({
+  formula,
+  tweaks,
+  setTweaks,
+  onTick,
+  onSelect,
+  onDone,
+  onBack,
+  answers,
+}) {
   const lastTick = useRef(0)
 
   // Throttle the tick — a slider drag fires dozens of changes a second and
@@ -177,16 +186,42 @@ export default function Refine({ formula, tweaks, setTweaks, onTick, onSelect, o
         </div>
 
         <div className="mt-5 flex flex-wrap items-center justify-between gap-4 border-t border-white/[0.07] pt-4 sm:mt-7 sm:pt-5">
-          <button
-            type="button"
-            onClick={() => {
-              setTweaks({ hue: 0, lightness: 0, chroma: 0, gloss: null, effect: null })
-              onSelect()
-            }}
-            className="label text-[10px] text-dim transition-colors duration-300 hover:text-chalk"
-          >
-            Reset to your answers
-          </button>
+          {/*
+            The only way out of this screen used to be forwards, or all the way
+            home. "Back to the start" throws the colour away, which is a hard
+            thing to offer as the sole exit from a screen whose whole job is
+            fiddling — the moment you want to undo everything you fiddled with
+            is exactly the moment you least want to start over.
+          */}
+          <div className="flex items-center gap-5">
+            <button
+              type="button"
+              onClick={onBack}
+              className="group flex items-center gap-2 text-ash transition-colors duration-300 hover:text-chalk"
+            >
+              <svg width="14" height="10" viewBox="0 0 14 10" fill="none" aria-hidden="true">
+                <path
+                  d="M5 1 1 5l4 4M1 5h12"
+                  stroke="currentColor"
+                  strokeWidth="1.1"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              <span className="label text-[10px]">Back</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setTweaks({ hue: 0, lightness: 0, chroma: 0, gloss: null, effect: null })
+                onSelect()
+              }}
+              className="label text-[10px] text-dim transition-colors duration-300 hover:text-chalk"
+            >
+              Reset to your answers
+            </button>
+          </div>
 
           <button
             type="button"

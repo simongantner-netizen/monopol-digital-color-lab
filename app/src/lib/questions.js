@@ -17,7 +17,7 @@ export const QUESTIONS = [
     id: 'world',
     index: '01',
     label: 'The one',
-    prompt: 'If you could only ever see one colour on your building — which one would it be?',
+    prompt: 'If you could only ever see one colour on your building – which one would it be?',
     note: 'Answer with your gut. We will get precise later.',
     columns: 4,
     /**

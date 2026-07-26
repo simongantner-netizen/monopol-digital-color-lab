@@ -39,6 +39,23 @@ BASE_PATH=/ npm --prefix "Monopol/Digital Color Lab/app" run build
 
 ## Vor der Präsentation erledigen
 
+**Musikrechte klären — der einzige offene Rechtepunkt.** Die Atmosphären sind
+sauber: Simons eigene Effektbibliothek plus drei Aufnahmen von Freesound, alle
+drei CC0 (public domain, keine Namensnennung nötig) — `pen.mp3` aus
+[#540567](https://freesound.org/s/540567/) von redsedona, `stone.mp3` aus
+[#421826](https://freesound.org/s/421826/) von Kinoton, `dawn.mp3` aus
+[#757868](https://freesound.org/s/757868/) von xkeril. Die Stimme kommt aus der
+lizenzierten Higgsfield-/ElevenLabs-Nutzung.
+
+Offen ist nur die Musik. Das Hintergrundbett (`app/src/assets/audio/music.mp3`)
+ist ein 52-Sekunden-Ausschnitt aus einem YouTube-Upload: „Fascial Sound Bath"
+von *Sound Energy Alchemist* (`_QZFHeQIQjc`). Für den internen Prototyp
+bewusst so entschieden, Rechte später. Vor jeder öffentlichen oder
+kundenseitigen Nutzung muss das geklärt oder ersetzt sein — die Seite liegt auf
+GitHub Pages und ist damit öffentlich abrufbar. Ersetzen heisst: neue Datei
+gleichen Namens ablegen, Länge in `LOOP_SECONDS.music` (`lib/audioAssets.js`)
+korrigieren, fertig.
+
 **Lionels E-Mail-Adresse eintragen** in `app/src/lib/contact.js`:
 
 ```js
@@ -95,15 +112,41 @@ Ergibt 960 Kombinationen, 48 Farbnamen (z. B. „Ember Kiln", „Nocturne Fathom
   das bei Übersättigung die Chroma reduziert statt den Farbton zu verfälschen.
 - **Tone Mapping: `NeutralToneMapping`** — hält gesättigte Farben treu. ACES
   würde die Farbe entsättigen, was bei einem Farbhersteller nicht geht.
-- **Web Audio, komplett prozedural** (`src/lib/audio.js`) — keine Audiodateien.
-  Der Farbton bestimmt den Grundton, die Sättigung öffnet den Filter. Die
-  Farbe ist hörbar. Ton oben rechts umschaltbar.
-- **Zwölf Atmosphären** (`src/lib/atmospheres.js`) — jede Welt in Frage 01 hat
-  ihren eigenen Klang: Brandung, Wüstenwind, Regen auf Kupfer, raschelnder
-  Weizen, das Summen einer Töpferscheibe. Ebenfalls synthetisiert: fast jede
-  Naturatmosphäre *ist* gefiltertes Rauschen — der Unterschied liegt darin,
-  welche Frequenzen überleben, wie langsam der Filter atmet und ob Transienten
-  darüberliegen (Tropfen, Halme, Insekten).
+- **Web Audio** (`src/lib/audio.js`) — vier Ebenen, die einander aus dem Weg
+  gehen: das Musikbett, ein Farb-Pad, die Welt unter dem Cursor und die
+  gesprochene Frage. Der Farbton bestimmt den Grundton des Pads, die Sättigung
+  öffnet den Filter und kippt das Musikbett heller oder wärmer. Die Farbe ist
+  hörbar. Ton oben rechts umschaltbar.
+- **Zwölf Atmosphären aus zehn Aufnahmen** (`src/lib/atmospheres.js`) — jede
+  Welt in Frage 01 hat ihren eigenen Klang. Zehn Betten reichen für zwölf
+  Welten, weil eine Welt nicht nur davon lebt, *welche* Aufnahme läuft, sondern
+  *wie* sie gehört wird: derselbe Wind ist eine Kreideklippe, wenn nur seine
+  Höhen überleben, und unberührter Sand, wenn nur sein Körper bleibt. Fällt
+  eine Datei aus, springt die alte synthetisierte Version ein — schlechtes
+  WLAN kostet dem Raum das Detail, nicht den Ton.
+- **Die Pegel der Welten sind gemessen, nicht geschätzt.** Ein Filter nimmt so
+  viel Energie weg, wie zufällig ausserhalb von ihm liegt — und das hängt ganz
+  von der Aufnahme ab. In der ersten Fassung waren vier Welten deshalb faktisch
+  stumm, Moos um 23 dB. Jetzt wird jede Filterkette offline gerendert, gemessen
+  und auf dieselbe Lautheit gezogen. **Wer einen Filter ändert, muss neu
+  messen** — der Gain daneben stimmt dann nicht mehr.
+- **Das Musikbett zieht mit jeder Antwort an** (`TEMPO_PER_ANSWER` in
+  `App.jsx`) und lässt beim Reveal wieder los. Bewusst nur 1,25 % pro Antwort:
+  im Browser gibt es kein brauchbares Time-Stretching, schneller heisst also
+  auch höher. 5 % pro Schritt wären kumuliert +21,6 % — 338 Cent, eine kleine
+  Terz, und aus dem tiefen Drone wird eine zu schnell laufende Bandmaschine.
+  1,25 % ergeben 86 Cent: spürbar, aber nicht benennbar.
+- **Die Fragen werden vorgelesen** — englische Frauenstimme (ElevenLabs
+  „Nora"), auf -23 LUFS gepegelt. Während sie spricht, geht alles andere um
+  7,5 dB zurück und kommt einen Wimpernschlag nach dem letzten Wort wieder,
+  damit der Raum wartend wirkt statt geschaltet.
+- **Loops sind sample-genau** — jede Datei ist auf sich selbst überblendet und
+  wird nach dem Dekodieren auf ihre exakte Länge zurückgeschnitten. MP3 trägt
+  ein paar Millisekunden Encoder-Padding, und ob ein Browser sie entfernt, ist
+  nicht standardisiert: Chrome tut es, Firefox erst ab 83, Safari macht sein
+  eigenes Ding. Ungeschnitten tickt ein 12-Sekunden-Bett fünfmal pro Minute.
+  Gemessen liegt der Sprung an der Nahtstelle unter dem grössten Sprung
+  *innerhalb* der Datei — bei `rumble` um den Faktor 60.
 
 ### Struktur
 
@@ -113,8 +156,11 @@ app/src/
     oklch.js         Farbmathematik
     questions.js     Die vier Fragen  ← Texte hier ändern
     colorEngine.js   Antworten → Farbe + Material
-    audio.js         Synthese
+    audio.js         Die ganze Klangregie
+    atmospheres.js   Welt → Aufnahme + Filter
+    audioAssets.js   Dateien + exakte Looplängen
     contact.js       Kontaktdaten     ← E-Mail hier eintragen
+  assets/audio/      7 Betten, 1 Musikbett, 4 gesprochene Fragen (2,3 MB)
   three/
     Stage.jsx        Canvas + Studio-Licht
     DottedField.jsx  Das Punktefeld

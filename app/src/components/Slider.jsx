@@ -40,6 +40,21 @@ export default function Slider({
   )
 
   const handleDown = (e) => {
+    /*
+      A pointerdown left to its default behaviour begins a text selection.
+      Drag to the end of the track — which is exactly what you do when you want
+      maximum gloss — and the pointer carries that selection out across the rest
+      of the page. Everything it touches then paints itself in ::selection's
+      colours, which are the lab colour on near-black: the whole interface
+      appears to have a colour filter laid over it, and only a stray click
+      clears it again.
+
+      preventDefault stops the selection ever starting. It also suppresses the
+      focus that would normally follow, so focus is taken explicitly — the
+      slider still has to be reachable and drivable from the keyboard.
+    */
+    e.preventDefault()
+    e.currentTarget.focus()
     e.currentTarget.setPointerCapture(e.pointerId)
     setDragging(true)
     onChange(valueFromEvent(e.clientX))

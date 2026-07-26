@@ -30,6 +30,29 @@ import { createAudioEngine } from './lib/audio'
  */
 const PHASES = ['intro', 'questions', 'composing', 'reveal', 'refine', 'finale']
 
+/**
+ * How much the music winds up per answer. It compounds over the four.
+ *
+ * The obvious number here is 5%, and it is the wrong one. A recording played
+ * faster also plays *higher* — there is no time-stretching in a browser worth
+ * having — and 5% compounded over four answers is 1.05⁴ = +21.6%, which is
+ * 338 cents: a minor third. The bed stops being the low resonant drone it was
+ * chosen for and starts sounding like a tape running fast, right at the moment
+ * the visitor is meant to be most held.
+ *
+ * At 1.25% the four answers add up to 86 cents — under a semitone. It reads as
+ * the room leaning in, and nobody can name what changed, which is the point.
+ * This is the one number to turn if the climb should be felt harder; 1.05 is
+ * what Simon originally asked for and is one edit away.
+ */
+const TEMPO_PER_ANSWER = 1.0125
+
+/** Phases where the search is over and the room is allowed to settle. */
+const RESTING = ['intro', 'reveal', 'refine', 'finale']
+
+/** Question 02's four answers, as how loud the room should be about it. */
+const VOICE_LOUDNESS = { whisper: 0, speak: 0.34, sing: 0.68, shout: 1 }
+
 export default function App() {
   const [phase, setPhase] = useState('intro')
   const [step, setStep] = useState(0)
@@ -43,6 +66,9 @@ export default function App() {
 
   const audio = useRef(null)
   if (!audio.current) audio.current = createAudioEngine()
+
+  /** True between an answer being given and the next question arriving. */
+  const settling = useRef(false)
 
   /**
    * Hovering an option puts it into the colour temporarily. The whole room
@@ -109,6 +135,50 @@ export default function App() {
     audio.current.setAtRest(['reveal', 'refine', 'finale'].includes(phase))
   }, [phase])
 
+  /**
+   * Question 02 asks how loud the colour should be, so the room obeys it.
+   * Driven off the live answers, which means it also moves under the pointer:
+   * hovering Shout is audibly louder than hovering Whisper, before committing.
+   */
+  useEffect(() => {
+    audio.current.setIntensity(VOICE_LOUDNESS[liveAnswers.voice] ?? 0.34)
+  }, [liveAnswers.voice])
+
+  /* --- the music winds up with every answer, and unwinds at the colour ----- */
+  useEffect(() => {
+    audio.current.setTempo(
+      RESTING.includes(phase) ? 1 : Math.pow(TEMPO_PER_ANSWER, answered),
+    )
+  }, [phase, answered])
+
+  /**
+   * The question, read aloud.
+   *
+   * Late on purpose: the line has to be on screen and settled before it is
+   * spoken, or the voice arrives as an interruption instead of as company.
+   * Leaving the questions cuts it off mid-sentence, which is the right
+   * behaviour — someone who has moved on is not still listening.
+   */
+  useEffect(() => {
+    if (phase !== 'questions') {
+      audio.current.silence()
+      return
+    }
+    const id = QUESTIONS[step]?.id
+    if (!id) return
+    const spoken = setTimeout(() => audio.current.speak(id), 900)
+    return () => clearTimeout(spoken)
+  }, [phase, step])
+
+  /**
+   * Start pulling the audio down while the visitor is still reading the door.
+   * It needs no AudioContext and therefore no gesture, so by the time they
+   * press Begin the room is usually already there.
+   */
+  useEffect(() => {
+    audio.current.prefetch()
+  }, [])
+
   useEffect(() => () => audio.current?.dispose(), [])
 
   const play = useCallback((kind) => audio.current.tone(kind), [])
@@ -122,6 +192,14 @@ export default function App() {
 
   const answer = useCallback(
     (questionId, optionId) => {
+      // An answer takes six-tenths of a second to be seen before the question
+      // changes, and for that whole time the card is still under the cursor.
+      // Without this, an impatient second click lands on a question that has
+      // already been answered and advances the step twice — past the last
+      // question, into a screen that does not exist.
+      if (settling.current) return
+      settling.current = true
+
       setAnswers((prev) => ({ ...prev, [questionId]: optionId }))
       setPreview(null)
       play('select')
@@ -129,9 +207,10 @@ export default function App() {
       const isLast = step === QUESTIONS.length - 1
       // Long enough to see the choice register on the field before moving on.
       setTimeout(() => {
+        settling.current = false
         if (isLast) setPhase('composing')
         else {
-          setStep((s) => s + 1)
+          setStep((s) => Math.min(s + 1, QUESTIONS.length - 1))
           play('advance')
         }
         // The world you chose keeps sounding for a moment into the next
@@ -146,6 +225,7 @@ export default function App() {
 
   const back = useCallback(() => {
     if (step === 0) return
+    settling.current = false
     setStep((s) => s - 1)
     setPreview(null)
     play('back')
@@ -165,6 +245,7 @@ export default function App() {
 
   /** Clear everything and go back to the questions, keeping the audio alive. */
   const restart = useCallback(() => {
+    settling.current = false
     setAnswers(EMPTY_ANSWERS)
     setTweaks(NO_TWEAKS)
     setPreview(null)
@@ -176,6 +257,7 @@ export default function App() {
 
   /** All the way out — back to the door. */
   const backToStart = useCallback(() => {
+    settling.current = false
     setAnswers(EMPTY_ANSWERS)
     setTweaks(NO_TWEAKS)
     setPreview(null)
@@ -273,7 +355,19 @@ export default function App() {
             key="reveal"
             formula={formula}
             answers={answers}
+            tweaks={tweaks}
             onRename={setCustomName}
+            onPick={(tweak) => {
+              // Only the three colour axes move. Gloss and the special effect
+              // were chosen in question 04 and are not this row's business.
+              setTweaks((prev) => ({
+                ...prev,
+                hue: tweak?.hue ?? 0,
+                lightness: tweak?.lightness ?? 0,
+                chroma: tweak?.chroma ?? 0,
+              }))
+              play('select')
+            }}
             onRefine={() => {
               setPhase('refine')
               play('advance')
@@ -290,6 +384,10 @@ export default function App() {
             setTweaks={setTweaks}
             onTick={() => play('tick')}
             onSelect={() => play('select')}
+            onBack={() => {
+              setPhase('reveal')
+              play('back')
+            }}
             onDone={() => {
               setPhase('finale')
               play('reveal')

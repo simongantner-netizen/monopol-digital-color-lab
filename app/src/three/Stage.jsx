@@ -34,12 +34,21 @@ function Studio() {
     <Environment resolution={256} frames={1} background={false}>
       <color attach="background" args={['#050607']} />
 
-      {/* The softbox you see reflected in a gloss finish. */}
+      {/*
+        The softbox you see reflected in a gloss finish.
+
+        Big and bright at once is what blew out the high-gloss panel: roughness
+        can scatter a reflection but it cannot make an area light dimmer, so at
+        maximum gloss the panel handed this emitter straight back and, once the
+        pointer tilted it into line, the highlight covered most of its face.
+        Larger and dimmer keeps the soft studio falloff — a bigger source
+        wrapping further around the edges — without the blow-out.
+      */}
       <Lightformer
         form="rect"
-        intensity={3.4}
+        intensity={1.5}
         position={[-5, 5.5, 9]}
-        scale={[10, 10, 1]}
+        scale={[15, 13, 1]}
       />
 
       {/* Narrow strip — the crisp highlight that separates gloss from satin. */}

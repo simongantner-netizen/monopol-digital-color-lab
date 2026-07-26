@@ -46,6 +46,6 @@ export function buildMailto(formula, recipe) {
     `Phone:`,
   ]
 
-  const subject = `Color Lab — ${name} (${code})`
+  const subject = `Color Lab – ${name} (${code})`
   return `mailto:${CONTACT.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join('\n'))}`
 }

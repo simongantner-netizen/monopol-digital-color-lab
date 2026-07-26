@@ -187,7 +187,7 @@ export default function Intro({ onBegin }) {
         custom={0}
       >
         Digital Color Lab
-        <span className="mx-2.5 opacity-40">—</span>
+        <span className="mx-2.5 opacity-40">–</span>
         <span className="inline-block">an immersive experience for the eyes and ears</span>
       </motion.p>
 
@@ -222,7 +222,7 @@ export default function Intro({ onBegin }) {
         animate="show"
         custom={3}
       >
-        Answer four. We will mix the rest — the way we would if you were standing
+        Answer four. We will mix the rest – the way we would if you were standing
         in the lab with us.
       </motion.p>
 
