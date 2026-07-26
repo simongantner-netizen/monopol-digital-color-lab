@@ -10,6 +10,31 @@ import { motion } from 'framer-motion'
 
 const ease = [0.16, 1, 0.3, 1]
 
+/**
+ * A full turn around the hue circle for the word "colour".
+ *
+ * Not a naive rainbow: at equal chroma, yellow burns and blue sinks, so each
+ * stop carries its own lightness and chroma to hold a steady visual weight
+ * against the near-black background. The final stop is the first one again,
+ * which is what makes the loop close without a jump.
+ */
+const SPECTRUM = [
+  'oklch(0.86 0.17 95)', // yellow
+  'oklch(0.79 0.18 70)', // amber
+  'oklch(0.72 0.19 42)', // orange
+  'oklch(0.67 0.20 22)', // red
+  'oklch(0.67 0.21 356)', // crimson
+  'oklch(0.65 0.20 328)', // magenta
+  'oklch(0.63 0.20 300)', // violet
+  'oklch(0.64 0.18 272)', // indigo
+  'oklch(0.68 0.16 245)', // blue
+  'oklch(0.74 0.13 215)', // cyan
+  'oklch(0.76 0.14 178)', // teal
+  'oklch(0.78 0.17 148)', // green
+  'oklch(0.82 0.18 120)', // lime
+  'oklch(0.86 0.17 95)', // back to yellow
+]
+
 const rise = {
   hidden: { opacity: 0, y: 26, filter: 'blur(10px)' },
   show: (i = 0) => ({
@@ -196,24 +221,22 @@ export default function Intro({ onBegin }) {
           <Word delay={0.09}>
             {/*
               The one word that is the subject of the whole application gets
-              the one treatment nothing else does: it arrives already lit, runs
-              once through the spectrum, and settles into chalk. A colour lab
-              should show what it does before it explains it.
+              the one treatment nothing else does: it is never white. It drifts
+              around the full hue circle, forever, slowly enough that you catch
+              it having moved rather than watch it move.
+
+              The last stop repeats the first so the loop closes seamlessly —
+              without that the colour snaps back at the wrap. Lightness and
+              chroma are tuned per hue so every step reads at roughly the same
+              weight on black; a literal spectrum would flash at yellow and go
+              muddy at blue. Linear easing, because a colour wheel has no
+              accents to land on.
             */}
             <motion.span
               className="accent inline-block"
-              initial={{ color: 'var(--color-chalk)' }}
-              animate={{
-                color: [
-                  'var(--color-chalk)',
-                  'oklch(0.72 0.19 28)',
-                  'oklch(0.82 0.16 92)',
-                  'oklch(0.72 0.15 155)',
-                  'oklch(0.68 0.16 240)',
-                  'var(--color-chalk)',
-                ],
-              }}
-              transition={{ duration: 4.2, delay: 1.5, times: [0, 0.16, 0.34, 0.54, 0.74, 1], ease: 'easeInOut' }}
+              initial={{ color: SPECTRUM[0] }}
+              animate={{ color: SPECTRUM }}
+              transition={{ duration: 34, repeat: Infinity, ease: 'linear' }}
             >
               colour
             </motion.span>
