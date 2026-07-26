@@ -207,6 +207,9 @@ export default function App() {
   // recipe, swatch row, button and caption — and the panel needs headroom for
   // its tilt on top of its flat height.
   const specimenReserve = phase === 'refine' ? 430 : 690
+  // The refine bench is capped at 58vh (70vh from sm up), so it claims its
+  // share proportionally rather than in pixels.
+  const specimenReserveFraction = phase === 'refine' ? 0.63 : 0
 
   return (
     <>
@@ -220,6 +223,7 @@ export default function App() {
         specimenPresence={showsSpecimen ? 1 : 0}
         specimenHeight={specimenHeight}
         specimenReserve={specimenReserve}
+        specimenReserveFraction={specimenReserveFraction}
       />
 
       <div className="vignette" />

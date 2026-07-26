@@ -32,6 +32,7 @@ export default function Specimen({
   interactive = true,
   heightFraction = 0.44,
   reservePx = 460,
+  reserveFraction = 0,
 }) {
   const meshRef = useRef()
   const materialRef = useRef()
@@ -53,13 +54,20 @@ export default function Specimen({
     const w = state.viewport.width
 
     /**
-     * The HTML below needs a roughly fixed number of pixels — a name, a code,
-     * a recipe, a button. A percentage-only rule ignores that: on a wide, low
-     * window 42% of the height still leaves too little for the text, and the
-     * two collide. So the text is reserved first and the panel takes what is
-     * left, which only ever bites on short windows.
+     * The interface below reserves its space first; the panel takes what is
+     * left. Two kinds of claim, because two kinds of block:
+     *
+     *   reservePx        text that is a roughly fixed height whatever the
+     *                    screen — a name, a code, a recipe, a button
+     *   reserveFraction  blocks sized in viewport units, like the refine
+     *                    bench at max-h-[58vh]
+     *
+     * The larger claim wins. A percentage-only rule leaves too little for text
+     * on a low window; a pixel-only rule underestimates the bench on a phone,
+     * where its columns stack and it grows to fill the screen.
      */
-    const usable = Math.max(0.16, (state.size.height - reservePx) / state.size.height)
+    const reserved = Math.max(reservePx, reserveFraction * state.size.height)
+    const usable = Math.max(0.16, (state.size.height - reserved) / state.size.height)
     const fraction = Math.min(heightFraction, usable)
 
     // A fraction of the visible height, but never so wide it crowds the sides.

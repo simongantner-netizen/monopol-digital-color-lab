@@ -67,13 +67,19 @@ export default function Refine({ formula, tweaks, setTweaks, onTick, onSelect, o
       {/* The bench. The whole upper half stays clear for the panel itself —
           the identity line rides on the bench rather than floating over the
           colour, which is the one thing nothing is allowed to sit on. */}
+      {/*
+        Capped at 58% of the viewport and scrolling inside itself. On a phone
+        the two columns stack, and an uncapped bench grew tall enough to push
+        the colour panel off screen — leaving you adjusting a colour you could
+        no longer see, which defeats the entire screen.
+      */}
       <motion.div
-        className="pointer-events-auto mx-auto w-full max-w-5xl rounded-2xl border border-white/10 bg-black/35 p-5 backdrop-blur-2xl sm:rounded-3xl sm:p-7"
+        className="no-scrollbar pointer-events-auto mx-auto max-h-[58vh] w-full max-w-5xl overflow-y-auto overscroll-contain rounded-2xl border border-white/10 bg-black/35 p-4 backdrop-blur-2xl sm:max-h-[70vh] sm:rounded-3xl sm:p-7"
         initial={{ opacity: 0, y: 44, filter: 'blur(14px)' }}
         animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
         transition={{ duration: 1.1, delay: 0.3, ease }}
       >
-        <div className="mb-6 flex flex-wrap items-center gap-3.5 border-b border-white/[0.07] pb-5">
+        <div className="mb-4 flex flex-wrap items-center gap-3.5 border-b border-white/[0.07] pb-4 sm:mb-6 sm:pb-5">
           <span
             className="block size-2 shrink-0 rounded-full"
             style={{ background: formula.css, boxShadow: `0 0 18px ${formula.css}` }}
@@ -87,7 +93,7 @@ export default function Refine({ formula, tweaks, setTweaks, onTick, onSelect, o
 
         <div className="grid gap-x-9 gap-y-6 lg:grid-cols-[1.15fr_1fr]">
           {/* Colour */}
-          <div className="space-y-5">
+          <div className="space-y-3.5 sm:space-y-5">
             <p className="label text-[10px] text-dim">The colour</p>
             <Slider
               label="Hue"
@@ -125,7 +131,7 @@ export default function Refine({ formula, tweaks, setTweaks, onTick, onSelect, o
           </div>
 
           {/* Surface */}
-          <div className="space-y-5">
+          <div className="space-y-3.5 sm:space-y-5">
             <p className="label text-[10px] text-dim">The surface</p>
             <Slider
               label="Gloss"
@@ -170,7 +176,7 @@ export default function Refine({ formula, tweaks, setTweaks, onTick, onSelect, o
           </div>
         </div>
 
-        <div className="mt-7 flex flex-wrap items-center justify-between gap-4 border-t border-white/[0.07] pt-5">
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-4 border-t border-white/[0.07] pt-4 sm:mt-7 sm:pt-5">
           <button
             type="button"
             onClick={() => {

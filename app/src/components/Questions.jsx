@@ -104,14 +104,18 @@ export default function Questions({ step, answers, onAnswer, onHover }) {
     [question, answers],
   )
 
+  // No justify-center on the section. In a scrolling flex container, centring
+  // content that overflows clips the top and makes it unreachable — on a phone
+  // the first question lost its opening line. `m-auto` on the child centres it
+  // when it fits and behaves like normal flow when it does not.
   return (
     <motion.section
-      className="no-scrollbar fixed inset-0 z-30 flex flex-col items-center justify-center overflow-y-auto overscroll-contain px-5 py-24 sm:px-10"
+      className="no-scrollbar fixed inset-0 z-30 flex flex-col items-center overflow-y-auto overscroll-contain px-5 py-20 sm:px-10 sm:py-24"
       exit={{ opacity: 0, filter: 'blur(12px)' }}
       transition={{ duration: 0.55, ease }}
     >
       <AnimatePresence mode="wait">
-        <div key={question.id} className="mx-auto w-full max-w-6xl">
+        <div key={question.id} className="m-auto w-full max-w-6xl">
           <motion.div
             className="mb-9 text-center sm:mb-12"
             initial={{ opacity: 0, y: 18, filter: 'blur(10px)' }}
