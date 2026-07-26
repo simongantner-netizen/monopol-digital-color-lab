@@ -7,6 +7,13 @@ Für: Lionel Schlessinger, Inhaber & CEO Monopol Colors.
 
 ---
 
+## Live
+
+**https://simongantner-netizen.github.io/monopol-digital-color-lab/**
+
+Jeder Push auf `main` baut und deployt automatisch (GitHub Actions →
+GitHub Pages). Dauert rund 40 Sekunden.
+
 ## Starten
 
 ```bash
@@ -19,6 +26,13 @@ Produktion bauen:
 
 ```bash
 npm --prefix "Monopol/Digital Color Lab/app" run build
+```
+
+Der Build erwartet, dass die Seite unter `/monopol-digital-color-lab/` liegt.
+Für einen anderen Host (Vercel, Netlify, eigene Domain) den Pfad überschreiben:
+
+```bash
+BASE_PATH=/ npm --prefix "Monopol/Digital Color Lab/app" run build
 ```
 
 ---
