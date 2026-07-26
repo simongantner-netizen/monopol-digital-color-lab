@@ -6,7 +6,12 @@ dist/
 
 # Original licensed font files and print artwork stay out of the repo.
 # Only the subsetted web fonts the site actually serves are committed.
-Assets/
+#
+# Anchored with a leading slash so it matches the top-level Assets/ folder
+# only. Unanchored, it also swallowed app/src/assets/ — macOS sets
+# core.ignorecase, so "Assets/" quietly matched "assets/" too, and the build
+# failed on a missing logo.
+/Assets/
 *.otf
 *.ttf
 *.eps
