@@ -102,6 +102,7 @@ export default function Stage({
   specimenHeight = 0.44,
   specimenReserve = 460,
   specimenReserveFraction = 0,
+  specimenSlot = null,
   fieldOpacity,
 }) {
   // Two THREE.Color instances, mutated in place — allocating colours per frame
@@ -143,6 +144,7 @@ export default function Stage({
           heightFraction={specimenHeight}
           reservePx={specimenReserve}
           reserveFraction={specimenReserveFraction}
+          slot={specimenSlot}
         />
       </Suspense>
     </Canvas>

@@ -34,7 +34,14 @@ function Row({ label, value }) {
   )
 }
 
-export default function Finale({ formula, answers, onRestart, onBackToRefine, onRename }) {
+export default function Finale({
+  formula,
+  answers,
+  slotRef,
+  onRestart,
+  onBackToRefine,
+  onRename,
+}) {
   const recipe = [
     getOption('world', answers?.world),
     getOption('voice', answers?.voice),
@@ -67,22 +74,42 @@ export default function Finale({ formula, answers, onRestart, onBackToRefine, on
           <ColourName name={formula.name} onRename={onRename} size="small" />
         </motion.div>
 
+        {/*
+          The colour itself — the real sample panel, not a fill.
+
+          This is an empty box on purpose. The panel is drawn in the WebGL
+          canvas behind the whole interface, so it cannot be a child of the
+          card: the card's own blur and tint would sit over the top of it and
+          undo the very thing worth showing. So the sheet leaves a gap of the
+          right size in the right place, hands its position over, and the panel
+          fills it from behind — which is also what keeps the two locked
+          together while the passport scrolls.
+
+          The glow underneath stays in CSS. It is the panel's light spilling
+          onto the sheet, and it belongs to the sheet.
+        */}
         <motion.div
-          className="mt-8 rounded-2xl border border-white/10 bg-black/30 p-6 backdrop-blur-2xl sm:p-7"
+          className="mt-8"
           variants={rise}
           initial="hidden"
           animate="show"
           custom={2}
         >
-          {/* The colour itself, as a physical-feeling chip. */}
           <div
-            className="mb-6 h-24 w-full rounded-xl sm:h-28"
-            style={{
-              background: formula.css,
-              boxShadow: `inset 0 1px 0 rgb(255 255 255 / 0.22), 0 18px 60px -18px ${formula.css}`,
-            }}
+            ref={slotRef}
+            aria-label={`${formula.name}, ${formula.surface.toLowerCase()} finish`}
+            className="mx-auto h-40 w-full max-w-[19rem] sm:h-48"
+            style={{ filter: `drop-shadow(0 26px 70px ${formula.css}38)` }}
           />
+        </motion.div>
 
+        <motion.div
+          className="mt-8 rounded-2xl border border-white/10 bg-black/30 p-6 backdrop-blur-2xl sm:p-7"
+          variants={rise}
+          initial="hidden"
+          animate="show"
+          custom={3}
+        >
           <Row label="Reference" value={formula.code} />
           <Row label="Finish" value={formula.surface} />
           <Row label="Effect" value={effectName(formula.effect)} />
@@ -105,7 +132,7 @@ export default function Finale({ formula, answers, onRestart, onBackToRefine, on
           variants={rise}
           initial="hidden"
           animate="show"
-          custom={3}
+          custom={4}
         >
           <a
             href={buildMailto(formula, recipe)}

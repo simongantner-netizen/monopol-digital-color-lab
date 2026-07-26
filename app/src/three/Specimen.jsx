@@ -52,6 +52,7 @@ export default function Specimen({
   heightFraction = 0.44,
   reservePx = 460,
   reserveFraction = 0,
+  slot = null,
 }) {
   const meshRef = useRef()
   const materialRef = useRef()
@@ -150,6 +151,41 @@ export default function Specimen({
    * never scale — because a panel that changed size as you moved the mouse
    * would read as broken, whereas a few hundredths of drift does not.
    */
+  /**
+   * Follow a slot in the page instead of framing against the viewport.
+   *
+   * The passport gives the panel a place of its own in the document, and that
+   * place scrolls. So the slot is measured every frame and converted into world
+   * units — the canvas is fixed and fills the window, which makes the mapping a
+   * single ratio. Returns null when there is no slot, or when it has scrolled
+   * far enough out of the window that the panel should stop being drawn.
+   */
+  const followSlot = (state) => {
+    const el = slot?.current
+    if (!el) return null
+
+    const rect = el.getBoundingClientRect()
+    if (!rect.height) return null
+
+    const h = state.viewport.height
+    const worldPerPx = h / state.size.height
+
+    // Gone from the window, or nearly — let it go rather than render it
+    // hanging off an edge.
+    const visible =
+      rect.bottom > rect.height * 0.35 && rect.top < state.size.height - rect.height * 0.2
+    if (!visible) return null
+
+    // The panel is square; the slot is a band, so its height is the constraint.
+    const size = Math.min(rect.height, rect.width) * worldPerPx
+    const centreY = rect.top + rect.height / 2
+    return {
+      scale: (size / PANEL_SIZE) / TILT_ALLOWANCE,
+      y: h / 2 - centreY * worldPerPx,
+      x: (rect.left + rect.width / 2 - state.size.width / 2) * worldPerPx,
+    }
+  }
+
   const settle = (state, mesh, layout) => {
     const s = mesh.scale.x
     if (s < 0.01) return { centre: mesh.position.y, drift: 0 }
@@ -223,31 +259,50 @@ export default function Specimen({
     mesh.rotation.y = tilt.current.y + Math.sin(t * 0.19) * 0.13
     mesh.rotation.z = Math.sin(t * 0.16) * 0.03
 
+    /*
+      A slot in the page wins over framing against the viewport.
+
+      On the passport the panel belongs to the document rather than to the
+      window: it sits in the sheet, above the values, and scrolls with them.
+      Everywhere else there is no slot and the panel frames itself as before.
+    */
+    const following = followSlot(state)
+
     // Presence eases the panel in from behind; framing keeps it inside the
     // window and clear of whichever controls the current phase needs.
     const layout = framing(state)
-    const target = presence < 0.5 ? 0.001 : layout.scale
+    const away = presence < 0.5 || (slot?.current && !following)
+    const target = away ? 0.001 : (following?.scale ?? layout.scale)
     mesh.scale.setScalar(damp(mesh.scale.x, target, 4.5, dt))
-    mesh.position.z = damp(mesh.position.z, presence < 0.5 ? -6 : 0, 4, dt)
+    mesh.position.x = damp(mesh.position.x, following?.x ?? 0, 5, dt)
+    mesh.position.z = damp(mesh.position.z, away ? -6 : 0, 4, dt)
 
     /*
       Vertical placement, measured after rotation and scale are final.
 
-      This used to be a hard clamp applied on top of the drift: the panel drank
-      up whatever height was going and was then pushed back down whenever its
-      corners crossed the top edge. Two things were wrong with that. The
-      clamp caught the drift as well, so the moment the panel reached the top
-      it stopped moving entirely and hung there dead. And there was no
-      corresponding floor, so on the reveal it settled straight through the
-      colour's name.
+      Following a slot, the slot has already reserved its own margins in the
+      page, so there is nothing to negotiate — the panel sits where the document
+      put it and keeps only enough drift to walk the highlight across the
+      surface. It tracks harder than the free-floating case, because a panel
+      that lagged behind the page while scrolling would read as detached.
 
-      Now the band decides. The panel is centred between the two limits and
-      breathes by whatever is left over, so it is never stopped by anything —
-      it simply has less room to move when there is less room to be had.
+      Free-floating, the band decides. This used to be a hard clamp applied on
+      top of the drift: the panel drank up whatever height was going and was
+      shoved back down whenever its corners crossed the top edge. That caught
+      the drift as well, so on reaching the top it stopped moving and hung there
+      dead — and with no matching floor it settled straight through the colour's
+      name. Now it is centred between the two limits and breathes by whatever is
+      left over, so nothing ever stops it; it simply has less room to move when
+      there is less to be had.
     */
-    const { centre, drift } = settle(state, mesh, layout)
-    baseY.current = damp(baseY.current, centre, 3.5, dt)
-    mesh.position.y = baseY.current + Math.sin(t * 0.42) * drift
+    if (following) {
+      baseY.current = damp(baseY.current, following.y, 9, dt)
+      mesh.position.y = baseY.current + Math.sin(t * 0.42) * DRIFT * 0.4
+    } else {
+      const { centre, drift } = settle(state, mesh, layout)
+      baseY.current = damp(baseY.current, centre, 3.5, dt)
+      mesh.position.y = baseY.current + Math.sin(t * 0.42) * drift
+    }
 
     // Material properties are damped too — dragging the gloss slider should
     // feel like turning a dial on a real finish, not flipping a switch.

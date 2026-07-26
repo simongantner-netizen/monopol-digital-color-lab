@@ -74,6 +74,17 @@ export default function App() {
   const settling = useRef(false)
 
   /**
+   * The passport's window for the sample panel.
+   *
+   * The panel is drawn in the WebGL canvas behind everything, so it cannot sit
+   * *inside* the passport card — the card's own blur would be over the top of
+   * it. Instead the passport leaves a gap in the document and hands its
+   * position over; the panel measures that gap every frame and fills it, which
+   * is also what keeps the two together while the sheet scrolls.
+   */
+  const passportSlot = useRef(null)
+
+  /**
    * Hovering an option puts it into the colour temporarily. The whole room
    * shifts while the pointer rests on a card and settles back when it leaves —
    * you feel the consequence of an answer before you commit to it.
@@ -282,11 +293,15 @@ export default function App() {
   }, [phase, back])
 
   /**
-   * The panel appears for the reveal and stays through refinement, then hands
-   * over: the passport carries its own colour chip, and keeping the 3D panel
-   * as well would put a second version of the same thing behind the text.
+   * The panel is on screen from the reveal to the end.
+   *
+   * On the passport it stops framing itself against the window and takes the
+   * slot the document gives it instead. A flat rectangle of colour there was
+   * the one place in the experience that went back on the whole argument for
+   * building this in WebGL — a passport for a coatings company should show the
+   * finish, not a fill.
    */
-  const showsSpecimen = ['reveal', 'refine'].includes(phase)
+  const showsSpecimen = ['reveal', 'refine', 'finale'].includes(phase)
   const fieldOpacity = phase === 'finale' ? 0.3 : showsSpecimen ? 0.6 : 1
 
   // How much of the visible height the panel may occupy, and how many pixels
@@ -318,6 +333,7 @@ export default function App() {
         specimenHeight={specimenHeight}
         specimenReserve={specimenReserve}
         specimenReserveFraction={specimenReserveFraction}
+        specimenSlot={phase === 'finale' ? passportSlot : null}
       />
 
       <div className="vignette" />
@@ -407,6 +423,7 @@ export default function App() {
             key="finale"
             formula={formula}
             answers={answers}
+            slotRef={passportSlot}
             onRename={setCustomName}
             onRestart={restart}
             onBackToRefine={() => {
