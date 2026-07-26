@@ -34,21 +34,39 @@ const rise = {
  * dipping through the round letters and climbing at the ascenders — because
  * that is what has to be revealed in order.
  */
-const PEN_PATH =
-  'M -80 -150 C 40 -250, 170 -70, 320 -165 C 430 -320, 520 -50, 615 -180 ' +
-  'C 715 -265, 820 -85, 900 -170 C 1000 -245, 1085 -75, 1180 -155 ' +
-  'C 1290 -290, 1400 -110, 1560 -185'
-
 /**
- * Measured length of PEN_PATH (getTotalLength reports 1777.2), rounded up.
+ * The pen strokes for "colour", in Summer Loving.
  *
- * The tidier route is pathLength="1" and a dash array of 1 — but browsers do
- * not apply pathLength to dash calculations reliably, and Chrome here rounded
- * it to 1 user unit against a 1777-unit path. The mask then became a fine
- * dotted line that let the whole word through. A concrete number is boring
- * and works; update it if the path changes.
+ * The face sets the word as brush capitals — COLOUR — not as joined script,
+ * so this is nine separate strokes in the order a hand makes them: each round
+ * letter as one anticlockwise loop, the L as stem-then-foot, the R as stem,
+ * bowl, leg. Coordinates were traced against the rendered word on a unit grid,
+ * in the font's own space (1000 upm, baseline at y = 0, y negative upwards).
+ *
+ * They are separate paths rather than one path with jumps, and that is not a
+ * stylistic choice: SVG restarts the dash pattern at every subpath, so a
+ * single path with M-jumps reveals every letter simultaneously. Nine paths
+ * with staggered delays give the order — and the small gaps between them are
+ * the pen leaving the page.
+ *
+ * `len` is each stroke's measured length, `at` and `for` its share of the
+ * animation, both normalised 0–1. Round letters get more time than short
+ * strokes, and there is a beat before the R.
  */
-const PEN_LENGTH = 1790
+const PEN_STROKES = [
+  { d: 'M 258 -300 C 205 -352, 92 -334, 70 -214 C 50 -102, 112 -16, 198 -26 C 244 -32, 268 -64, 280 -96', len: 640, at: 0, for: 0.17 },
+  { d: 'M 350 -330 C 262 -308, 218 -150, 252 -58 C 292 8, 392 -6, 428 -122 C 460 -228, 428 -320, 352 -332', len: 815, at: 0.15, for: 0.19 },
+  { d: 'M 511 -392 C 490 -280, 458 -140, 440 -44', len: 360, at: 0.35, for: 0.09 },
+  { d: 'M 440 -44 C 508 -32, 618 -28, 700 -26', len: 265, at: 0.44, for: 0.07 },
+  { d: 'M 815 -312 C 726 -292, 682 -146, 712 -56 C 750 6, 848 -8, 886 -122 C 918 -224, 888 -302, 817 -314', len: 780, at: 0.52, for: 0.18 },
+  { d: 'M 978 -300 C 962 -206, 952 -96, 990 -44 C 1030 6, 1090 -26, 1112 -128 C 1128 -212, 1138 -258, 1146 -292', len: 626, at: 0.68, for: 0.15 },
+  { d: 'M 1222 -360 C 1196 -250, 1180 -116, 1168 -28', len: 340, at: 0.84, for: 0.08 },
+  { d: 'M 1226 -354 C 1318 -366, 1378 -294, 1344 -226 C 1320 -180, 1268 -180, 1234 -190', len: 348, at: 0.9, for: 0.07 },
+  { d: 'M 1256 -192 C 1330 -142, 1400 -76, 1466 -28', len: 270, at: 0.95, for: 0.05 },
+]
+
+/** How long the whole word takes to write. */
+const WRITE_SECONDS = 2.9
 
 /**
  * A word that writes itself.
@@ -92,24 +110,29 @@ function Handwritten({ children, delay = 0 }) {
         aria-hidden="true"
       >
         <defs>
-          <mask id={maskId} maskUnits="userSpaceOnUse" x="-90" y="-430" width="1700" height="520">
-            <motion.path
-              d={PEN_PATH}
-              fill="none"
-              stroke="#fff"
-              strokeWidth="520"
-              strokeLinecap="round"
-              strokeDasharray={`${PEN_LENGTH} ${PEN_LENGTH}`}
-              initial={{ strokeDashoffset: reduced ? 0 : PEN_LENGTH }}
-              animate={{ strokeDashoffset: 0 }}
-              transition={{
-                duration: reduced ? 0 : 2.6,
-                delay: reduced ? 0 : delay,
-                // Uneven on purpose: a hand hesitates between letter groups,
-                // and perfectly even travel is what gives a wipe away.
-                ease: [0.55, 0.06, 0.3, 0.98],
-              }}
-            />
+          <mask id={maskId} maskUnits="userSpaceOnUse" x="-200" y="-500" width="1900" height="700">
+            {PEN_STROKES.map((stroke, i) => (
+              <motion.path
+                key={i}
+                d={stroke.d}
+                fill="none"
+                stroke="#fff"
+                // Wide enough to cover the brush strokes it is revealing, tight
+                // enough that the reveal still reads as a moving nib.
+                strokeWidth="235"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeDasharray={`${stroke.len} ${stroke.len}`}
+                initial={{ strokeDashoffset: reduced ? 0 : stroke.len }}
+                animate={{ strokeDashoffset: 0 }}
+                transition={{
+                  duration: reduced ? 0 : WRITE_SECONDS * stroke.for,
+                  delay: reduced ? 0 : delay + WRITE_SECONDS * stroke.at,
+                  // A stroke of the hand accelerates out and lands softly.
+                  ease: [0.4, 0.02, 0.35, 1],
+                }}
+              />
+            ))}
           </mask>
         </defs>
 
