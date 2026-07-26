@@ -1,5 +1,4 @@
-import { useId } from 'react'
-import { motion, useReducedMotion } from 'framer-motion'
+import { motion } from 'framer-motion'
 
 /**
  * The door.
@@ -21,135 +20,6 @@ const rise = {
   }),
 }
 
-/**
- * The pen path for "colour".
- *
- * Traced through the actual glyph metrics of Summer Loving, read out of the
- * font: the word spans 0–1459 units at 1000 upm, x-height tops out near 350,
- * the l and r rise to ~400, and l drops to -38. Coordinates below are in that
- * space with the baseline at y = 0 and y running up-negative, the way SVG
- * wants it.
- *
- * It is a stroke, not an outline — the route a hand takes across the word,
- * dipping through the round letters and climbing at the ascenders — because
- * that is what has to be revealed in order.
- */
-/**
- * The pen strokes for "colour", in Summer Loving.
- *
- * The face sets the word as brush capitals — COLOUR — not as joined script,
- * so this is nine separate strokes in the order a hand makes them: each round
- * letter as one anticlockwise loop, the L as stem-then-foot, the R as stem,
- * bowl, leg. Coordinates were traced against the rendered word on a unit grid,
- * in the font's own space (1000 upm, baseline at y = 0, y negative upwards).
- *
- * They are separate paths rather than one path with jumps, and that is not a
- * stylistic choice: SVG restarts the dash pattern at every subpath, so a
- * single path with M-jumps reveals every letter simultaneously. Nine paths
- * with staggered delays give the order — and the small gaps between them are
- * the pen leaving the page.
- *
- * `len` is each stroke's measured length, `at` and `for` its share of the
- * animation, both normalised 0–1. Round letters get more time than short
- * strokes, and there is a beat before the R.
- */
-const PEN_STROKES = [
-  { d: 'M 258 -300 C 205 -352, 92 -334, 70 -214 C 50 -102, 112 -16, 198 -26 C 244 -32, 268 -64, 280 -96', len: 640, at: 0, for: 0.17 },
-  { d: 'M 350 -330 C 262 -308, 218 -150, 252 -58 C 292 8, 392 -6, 428 -122 C 460 -228, 428 -320, 352 -332', len: 815, at: 0.15, for: 0.19 },
-  { d: 'M 511 -392 C 490 -280, 458 -140, 440 -44', len: 360, at: 0.35, for: 0.09 },
-  { d: 'M 440 -44 C 508 -32, 618 -28, 700 -26', len: 265, at: 0.44, for: 0.07 },
-  { d: 'M 815 -312 C 726 -292, 682 -146, 712 -56 C 750 6, 848 -8, 886 -122 C 918 -224, 888 -302, 817 -314', len: 780, at: 0.52, for: 0.18 },
-  { d: 'M 978 -300 C 962 -206, 952 -96, 990 -44 C 1030 6, 1090 -26, 1112 -128 C 1128 -212, 1138 -258, 1146 -292', len: 626, at: 0.68, for: 0.15 },
-  { d: 'M 1222 -360 C 1196 -250, 1180 -116, 1168 -28', len: 340, at: 0.84, for: 0.08 },
-  { d: 'M 1226 -354 C 1318 -366, 1378 -294, 1344 -226 C 1320 -180, 1268 -180, 1234 -190', len: 348, at: 0.9, for: 0.07 },
-  { d: 'M 1256 -192 C 1330 -142, 1400 -76, 1466 -28', len: 270, at: 0.95, for: 0.05 },
-]
-
-/** How long the whole word takes to write. */
-const WRITE_SECONDS = 2.9
-
-/**
- * A word that writes itself.
- *
- * Summer Loving is a hand, so it arrives the way a hand arrives. The word is
- * SVG text; a single thick stroke runs along the pen path above and is used
- * as its mask. Animating that stroke's dashoffset walks the mask along the
- * route, so the letters appear in writing order, following the rise and fall
- * of the script rather than a straight edge sweeping past.
- *
- * Why the mask is a stroke and not the glyph outlines: font outlines are
- * contours. Animating their dashoffset traces the *edge* of each letter — the
- * shape gets drawn around, which reads as inking a stencil, not as writing.
- * The stroke is wide enough (520 units against a ~350 x-height) to cover the
- * letterforms completely, with a round cap so the leading edge is a nib.
- *
- * pathLength="1" normalises the path so the dash maths needs no measurement.
- */
-function Handwritten({ children, delay = 0 }) {
-  const reduced = useReducedMotion()
-  const maskId = useId()
-
-  // Sized from the font's own metrics rather than by eye. At 1.3em the type
-  // scale is 0.0013em per unit, so the word (1412 units wide) occupies 1.84em,
-  // and the SVG — wider, because the pen stroke overshoots the letters at both
-  // ends — is offset back by its own left margin. The baseline sits at y = 0
-  // in the viewBox, 90 units above its bottom edge, which is exactly how far
-  // the SVG hangs below the text baseline.
-  return (
-    <span
-      className="relative inline-block align-baseline"
-      style={{ width: '1.84em', height: '0.56em' }}
-      role="img"
-      aria-label={children}
-    >
-      <svg
-        viewBox="-90 -430 1700 520"
-        className="absolute overflow-visible"
-        style={{ width: '2.21em', left: '-0.117em', bottom: '-0.117em' }}
-        preserveAspectRatio="xMidYMid meet"
-        aria-hidden="true"
-      >
-        <defs>
-          <mask id={maskId} maskUnits="userSpaceOnUse" x="-200" y="-500" width="1900" height="700">
-            {PEN_STROKES.map((stroke, i) => (
-              <motion.path
-                key={i}
-                d={stroke.d}
-                fill="none"
-                stroke="#fff"
-                // Wide enough to cover the brush strokes it is revealing, tight
-                // enough that the reveal still reads as a moving nib.
-                strokeWidth="235"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeDasharray={`${stroke.len} ${stroke.len}`}
-                initial={{ strokeDashoffset: reduced ? 0 : stroke.len }}
-                animate={{ strokeDashoffset: 0 }}
-                transition={{
-                  duration: reduced ? 0 : WRITE_SECONDS * stroke.for,
-                  delay: reduced ? 0 : delay + WRITE_SECONDS * stroke.at,
-                  // A stroke of the hand accelerates out and lands softly.
-                  ease: [0.4, 0.02, 0.35, 1],
-                }}
-              />
-            ))}
-          </mask>
-        </defs>
-
-        <text
-          x="0"
-          y="0"
-          fontSize="1000"
-          fill="currentColor"
-          mask={`url(#${maskId})`}
-          style={{ fontFamily: "'Summer Loving', cursive" }}
-        >
-          {children}
-        </text>
-      </svg>
-    </span>
-  )
-}
 
 /**
  * Typographic reveal, one word at a time.
@@ -325,7 +195,7 @@ export default function Intro({ onBegin }) {
         <Line delay={0.55}>
           <Word>Every</Word>
           <Word delay={0.09}>
-            <Handwritten delay={1.15}>colour</Handwritten>
+            <span className="accent">colour</span>
           </Word>
         </Line>
 
