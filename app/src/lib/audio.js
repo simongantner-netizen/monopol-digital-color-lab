@@ -33,6 +33,16 @@ const ROOT_HZ = 55 // A1 — the pad lives low
 const semitone = (n) => Math.pow(2, n / 12)
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v))
 
+/**
+ * Question 02's answer, as a multiplier on the music bed.
+ *
+ * Pinned so that Speak — the neutral answer, at 0.34 — lands on exactly 1,
+ * which is the level the bed plays at everywhere else in the experience.
+ * Whisper and Shout then open out either side of it: 0.62 to 1.74, a ratio of
+ * 2.8, or a little under nine decibels.
+ */
+const loudnessFor = (intensity) => 0.62 + intensity * 1.12
+
 /** Hue → a scale degree, so neighbouring colours are neighbouring notes. */
 function hueToRatio(hue) {
   const step = Math.round((hue / 360) * 12) % 12
@@ -287,7 +297,7 @@ export function createAudioEngine() {
     musicTone.connect(programme)
 
     musicBus = ctx.createGain()
-    musicBus.gain.value = MUSIC_LEVEL * (0.78 + intensity * 0.52)
+    musicBus.gain.value = MUSIC_LEVEL * loudnessFor(intensity)
     musicBus.connect(musicTone)
 
     // Atmospheres bypass the pad's lowpass — a rain texture needs its highs.
@@ -445,17 +455,27 @@ export function createAudioEngine() {
    * How loud the colour is.
    *
    * Question 02 asks whether the colour should whisper or be heard from across
-   * the street, and until now that only moved a chroma multiplier — the one
-   * question about volume was the one question you could not hear. So the bed
-   * comes up with it. Deliberately a narrow range: whisper to shout is about
-   * four and a half decibels, enough to feel the answer land while hovering,
-   * not enough to make Shout tiring by the fourth question. It stays where the
-   * answer left it, because a loud colour is loud for the rest of the visit.
+   * the street, and that used to move a chroma multiplier and nothing else —
+   * the one question about volume was the one question you could not hear. So
+   * the bed answers it.
+   *
+   * Whisper to Shout is about nine decibels, which is a lot: roughly the
+   * difference between a room you are in and a room next door. It has to be,
+   * because this is felt on hover, in the second or so a pointer rests on a
+   * card, and a polite few decibels inside that window reads as nothing at all.
+   * Speak sits at exactly the level the bed plays everywhere else, so the
+   * spread opens either side of normal rather than pushing everything up.
+   *
+   * The glide matters as much as the range. At a second and a half the change
+   * arrived after the pointer had already moved on, which made a real
+   * difference feel like no difference; two thirds of a second lands it while
+   * you are still on the card. It then stays where the answer left it — a loud
+   * colour is loud for the rest of the visit.
    */
   function setIntensity(v) {
     intensity = clamp(v, 0, 1)
     if (!musicBus || !started) return
-    glide(musicBus.gain, MUSIC_LEVEL * (0.78 + intensity * 0.52), ctx.currentTime, 0.45)
+    glide(musicBus.gain, MUSIC_LEVEL * loudnessFor(intensity), ctx.currentTime, 0.22)
   }
 
   /* ---------------------------------------------------------------------
