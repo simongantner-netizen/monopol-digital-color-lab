@@ -1,4 +1,11 @@
-import { motion } from 'framer-motion'
+import { useEffect } from 'react'
+import {
+  animate,
+  motion,
+  useMotionTemplate,
+  useMotionValue,
+  useReducedMotion,
+} from 'framer-motion'
 
 /**
  * The door.
@@ -10,31 +17,6 @@ import { motion } from 'framer-motion'
 
 const ease = [0.16, 1, 0.3, 1]
 
-/**
- * A full turn around the hue circle for the word "colour".
- *
- * Not a naive rainbow: at equal chroma, yellow burns and blue sinks, so each
- * stop carries its own lightness and chroma to hold a steady visual weight
- * against the near-black background. The final stop is the first one again,
- * which is what makes the loop close without a jump.
- */
-const SPECTRUM = [
-  'oklch(0.86 0.17 95)', // yellow
-  'oklch(0.79 0.18 70)', // amber
-  'oklch(0.72 0.19 42)', // orange
-  'oklch(0.67 0.20 22)', // red
-  'oklch(0.67 0.21 356)', // crimson
-  'oklch(0.65 0.20 328)', // magenta
-  'oklch(0.63 0.20 300)', // violet
-  'oklch(0.64 0.18 272)', // indigo
-  'oklch(0.68 0.16 245)', // blue
-  'oklch(0.74 0.13 215)', // cyan
-  'oklch(0.76 0.14 178)', // teal
-  'oklch(0.78 0.17 148)', // green
-  'oklch(0.82 0.18 120)', // lime
-  'oklch(0.86 0.17 95)', // back to yellow
-]
-
 const rise = {
   hidden: { opacity: 0, y: 26, filter: 'blur(10px)' },
   show: (i = 0) => ({
@@ -43,6 +25,59 @@ const rise = {
     filter: 'blur(0px)',
     transition: { duration: 1.25, delay: 0.5 + i * 0.16, ease },
   }),
+}
+
+/**
+ * A word that writes itself.
+ *
+ * Summer Loving is a hand, so it should arrive the way a hand arrives — left
+ * to right, at the speed of a pen. A soft-edged mask travels across the word
+ * and uncovers it; the leading edge is tilted to about 101° to match the
+ * script's own slant, so the reveal follows the letterforms instead of
+ * cutting across them.
+ *
+ * The obvious alternative — converting the glyphs to SVG and animating
+ * stroke-dasharray — does not work here. Font outlines are contours, not
+ * skeletons, so "drawing" them traces the outside edge of each letter rather
+ * than the stroke a pen would make. It reads as a shape being outlined, not
+ * as writing.
+ *
+ * The keyframes are deliberately uneven: a real hand hesitates between letter
+ * groups. Perfectly linear travel is the tell that gives away a wipe.
+ */
+function Handwritten({ children, delay = 0 }) {
+  const progress = useMotionValue(-14)
+  const reduced = useReducedMotion()
+
+  // Opaque behind the edge, a short translucent zone at it, clear ahead —
+  // the wet-ink moment where the stroke is still being laid down.
+  const mask = useMotionTemplate`linear-gradient(101deg,
+    #000 ${progress}%,
+    rgba(0,0,0,0.55) calc(${progress}% + 3%),
+    transparent calc(${progress}% + 10%))`
+
+  useEffect(() => {
+    if (reduced) {
+      progress.set(120)
+      return
+    }
+    const controls = animate(progress, [-14, 16, 30, 58, 74, 120], {
+      duration: 2.9,
+      delay,
+      times: [0, 0.16, 0.3, 0.56, 0.72, 1],
+      ease: 'easeInOut',
+    })
+    return () => controls.stop()
+  }, [progress, delay, reduced])
+
+  return (
+    <motion.span
+      className="accent inline-block"
+      style={{ WebkitMaskImage: mask, maskImage: mask }}
+    >
+      {children}
+    </motion.span>
+  )
 }
 
 /**
@@ -219,27 +254,7 @@ export default function Intro({ onBegin }) {
         <Line delay={0.55}>
           <Word>Every</Word>
           <Word delay={0.09}>
-            {/*
-              The one word that is the subject of the whole application gets
-              the one treatment nothing else does: it is never white. It drifts
-              around the full hue circle, forever, slowly enough that you catch
-              it having moved rather than watch it move.
-
-              The last stop repeats the first so the loop closes seamlessly —
-              without that the colour snaps back at the wrap. Lightness and
-              chroma are tuned per hue so every step reads at roughly the same
-              weight on black; a literal spectrum would flash at yellow and go
-              muddy at blue. Linear easing, because a colour wheel has no
-              accents to land on.
-            */}
-            <motion.span
-              className="accent inline-block"
-              initial={{ color: SPECTRUM[0] }}
-              animate={{ color: SPECTRUM }}
-              transition={{ duration: 34, repeat: Infinity, ease: 'linear' }}
-            >
-              colour
-            </motion.span>
+            <Handwritten delay={1.15}>colour</Handwritten>
           </Word>
         </Line>
 
