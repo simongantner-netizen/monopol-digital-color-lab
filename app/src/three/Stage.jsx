@@ -96,6 +96,7 @@ export default function Stage({
   fieldHex,
   energy,
   bloom,
+  density,
   specimenParams,
   specimenPresence,
   specimenHeight = 0.44,
@@ -128,7 +129,13 @@ export default function Stage({
     >
       <Suspense fallback={null}>
         <Studio />
-        <DottedField colour={fieldColour} energy={energy} bloom={bloom} opacity={fieldOpacity} />
+        <DottedField
+          colour={fieldColour}
+          energy={energy}
+          bloom={bloom}
+          density={density}
+          opacity={fieldOpacity}
+        />
         <Specimen
           params={specimenParams}
           colour={colour}

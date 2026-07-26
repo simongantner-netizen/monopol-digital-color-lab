@@ -50,6 +50,9 @@ const TEMPO_PER_ANSWER = 1.0125
 /** Phases where the search is over and the room is allowed to settle. */
 const RESTING = ['intro', 'reveal', 'refine', 'finale']
 
+/** Phases where the colour exists — everything after the composing beat. */
+const RESULT_PHASES = ['reveal', 'refine', 'finale']
+
 /** Question 02's four answers, as how loud the room should be about it. */
 const VOICE_LOUDNESS = { whisper: 0, speak: 0.34, sing: 0.68, shout: 1 }
 
@@ -305,6 +308,10 @@ export default function App() {
         fieldHex={fieldHex}
         energy={phase === 'intro' ? 0 : Math.max(answered / QUESTIONS.length, showsSpecimen ? 1 : 0)}
         bloom={bloom}
+        // The field doubles its lines once the colour exists, and keeps them
+        // for the rest of the visit — the room the colour lives in is a denser
+        // room than the one the questions were asked in.
+        density={RESULT_PHASES.includes(phase) ? 1 : 0}
         fieldOpacity={fieldOpacity}
         specimenParams={specimen}
         specimenPresence={showsSpecimen ? 1 : 0}

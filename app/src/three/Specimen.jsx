@@ -22,7 +22,26 @@ const PANEL_SIZE = 5.6
 /** Clear space above the panel, as a fraction of the visible height. */
 const TOP_MARGIN = 0.075
 
-/** Scratch matrix for the clamp — reused so the frame loop allocates nothing. */
+/**
+ * Clear space between the panel and whatever the interface has reserved below
+ * it. The panel is allowed to be close to the type; it is not allowed to touch
+ * it, and a name set at four rem needs visible air above its ascenders.
+ */
+const BOTTOM_MARGIN = 0.045
+
+/**
+ * How much taller than its flat height a tilted panel reaches.
+ *
+ * A square rotated in its own plane puts its corners above its edge, and the
+ * face leaning toward the lens is magnified by perspective. Used for sizing
+ * only — the true reach is measured every frame further down.
+ */
+const TILT_ALLOWANCE = 1.18
+
+/** How far the panel breathes, in world units, when there is room for it. */
+const DRIFT = 0.07
+
+/** Scratch matrix for the reach measurement — the frame loop allocates nothing. */
 const clampMatrix = new THREE.Matrix4()
 
 export default function Specimen({
@@ -37,6 +56,15 @@ export default function Specimen({
   const meshRef = useRef()
   const materialRef = useRef()
   const tilt = useRef({ x: 0, y: 0 })
+
+  /**
+   * The panel's settled height, before the drift is added on top.
+   *
+   * Kept apart from mesh.position.y on purpose: damping toward a target from a
+   * value that already has this frame's wobble baked into it makes the wobble
+   * feed itself, and the amount of room left over stops being knowable.
+   */
+  const baseY = useRef(0)
 
   /**
    * Size and position are derived from the live viewport every frame, never
@@ -66,25 +94,45 @@ export default function Specimen({
      * on a low window; a pixel-only rule underestimates the bench on a phone,
      * where its columns stack and it grows to fill the screen.
      */
-    const reserved = Math.max(reservePx, reserveFraction * state.size.height)
-    const usable = Math.max(0.16, (state.size.height - reserved) / state.size.height)
-    const fraction = Math.min(heightFraction, usable)
+    const claim = Math.max(reservePx, reserveFraction * state.size.height)
+    /*
+      The interface can ask, but it cannot have everything. On a short window
+      the reveal's claim — a name, a code, a recipe, a swatch row, a button and
+      a caption — comes to most of the screen, and taken literally it leaves the
+      panel a sliver of a band to live in. Capped, the panel keeps a workable
+      share and the text below scrolls if it must.
+    */
+    const reserved = Math.min(claim, state.size.height * 0.6)
+    // That claim is made in CSS pixels; the panel lives in world units.
+    const reservedWorld = (reserved / state.size.height) * h
 
-    // A fraction of the visible height, but never so wide it crowds the sides.
-    const panel = Math.min(fraction * h, w * 0.56)
+    /*
+      The band the panel is allowed to occupy: clear of the top edge, clear of
+      the interface below, with air on both sides of it.
 
-    // The camera is aimed at the origin, so the centre of frame on this plane
-    // is y = 0 — not the camera's own height. Adding camera.position.y here
-    // pushed the panel up by exactly that offset and clipped it off the top.
-    const topEdge = h / 2
+      The camera is aimed at the origin, so the centre of frame on this plane
+      is y = 0 — not the camera's own height. Adding camera.position.y here
+      pushed the panel up by exactly that offset and clipped it off the top.
+    */
+    const top = h / 2 - TOP_MARGIN * h
+    const bottom = -h / 2 + reservedWorld + BOTTOM_MARGIN * h
+    const band = Math.max(0.5, top - bottom)
 
-    return {
-      scale: panel / PANEL_SIZE,
-      // 1.18 leaves room for the tilt: a rotated square reaches higher at its
-      // corners than a flat one does at its edge. This is the resting target;
-      // clampTop below is what actually guarantees it.
-      y: topEdge - TOP_MARGIN * h - (panel / 2) * 1.18,
-    }
+    /*
+      The panel takes the smallest of what it may be: its share of the height,
+      what the band can hold once tilted, and never so wide it crowds the sides.
+
+      The band gives up room for the drift before it is divided. A panel sized
+      to fill its band exactly would fit — and then have nowhere left to move,
+      which is the stillness this was meant to cure.
+    */
+    const panel = Math.min(
+      heightFraction * h,
+      Math.max(0.4, band - 2 * DRIFT) / TILT_ALLOWANCE,
+      w * 0.56,
+    )
+
+    return { scale: panel / PANEL_SIZE, top, bottom }
   }
 
   /**
@@ -102,9 +150,9 @@ export default function Specimen({
    * never scale — because a panel that changed size as you moved the mouse
    * would read as broken, whereas a few hundredths of drift does not.
    */
-  const clampTop = (state, mesh) => {
+  const settle = (state, mesh, layout) => {
     const s = mesh.scale.x
-    if (s < 0.01) return
+    if (s < 0.01) return { centre: mesh.position.y, drift: 0 }
 
     const e = clampMatrix.makeRotationFromEuler(mesh.rotation).elements
     const half = (PANEL_SIZE / 2) * s
@@ -116,9 +164,20 @@ export default function Specimen({
 
     const camDist = state.camera.position.z
     const perspective = camDist / Math.max(0.001, camDist - extentZ)
+    const reach = extentY * perspective
 
-    const limit = state.viewport.height / 2 - TOP_MARGIN * state.viewport.height
-    mesh.position.y = Math.min(mesh.position.y, limit - extentY * perspective)
+    // Where the panel's *centre* may sit for its silhouette to stay inside the
+    // band. Both ends, not just the top.
+    const highest = layout.top - reach
+    const lowest = layout.bottom + reach
+
+    return {
+      centre: (highest + lowest) / 2,
+      // Whatever room is left over is what the panel is allowed to breathe by.
+      // When the band is generous this is the full drift and nothing has
+      // changed; when it is tight the breathing narrows smoothly to nothing.
+      drift: Math.min(DRIFT, Math.max(0, (highest - lowest) / 2)),
+    }
   }
 
   const tooth = useMemo(() => createToothNormalMap(), [])
@@ -169,12 +228,26 @@ export default function Specimen({
     const layout = framing(state)
     const target = presence < 0.5 ? 0.001 : layout.scale
     mesh.scale.setScalar(damp(mesh.scale.x, target, 4.5, dt))
-    mesh.position.y = damp(mesh.position.y, layout.y, 3.5, dt) + Math.sin(t * 0.42) * 0.07
     mesh.position.z = damp(mesh.position.z, presence < 0.5 ? -6 : 0, 4, dt)
 
-    // Last word on vertical placement — runs after rotation, scale and drift
-    // are final, so nothing downstream can push the panel back off the top.
-    clampTop(state, mesh)
+    /*
+      Vertical placement, measured after rotation and scale are final.
+
+      This used to be a hard clamp applied on top of the drift: the panel drank
+      up whatever height was going and was then pushed back down whenever its
+      corners crossed the top edge. Two things were wrong with that. The
+      clamp caught the drift as well, so the moment the panel reached the top
+      it stopped moving entirely and hung there dead. And there was no
+      corresponding floor, so on the reveal it settled straight through the
+      colour's name.
+
+      Now the band decides. The panel is centred between the two limits and
+      breathes by whatever is left over, so it is never stopped by anything —
+      it simply has less room to move when there is less room to be had.
+    */
+    const { centre, drift } = settle(state, mesh, layout)
+    baseY.current = damp(baseY.current, centre, 3.5, dt)
+    mesh.position.y = baseY.current + Math.sin(t * 0.42) * drift
 
     // Material properties are damped too — dragging the gloss slider should
     // feel like turning a dial on a real finish, not flipping a switch.

@@ -15,8 +15,19 @@ import * as THREE from 'three'
  */
 
 const COLS = 168
-const ROWS = 110
+
+/**
+ * Twice the rows at half the depth spacing: the field covers exactly the same
+ * ground as before, drawn with twice as many lines through it.
+ *
+ * Every second row is marked as an in-between line and stays invisible until
+ * the colour arrives, when `density` fades it in. Doing it this way rather
+ * than rebuilding the geometry per phase means one buffer, uploaded once, and
+ * the change is a fade rather than a pop.
+ */
+const ROWS = 220
 const SPACING = 0.44
+const ROW_SPACING = SPACING / 2
 
 const vertexShader = /* glsl */ `
   // uEnergy and uBloom are read in both stages, so their precision is pinned
@@ -29,10 +40,12 @@ const vertexShader = /* glsl */ `
   uniform highp float uSize;
 
   attribute float aRand;
+  attribute float aInfill;   // 1 on the lines that only appear with the colour
 
   varying float vLift;
   varying float vRand;
   varying float vRadial;
+  varying float vInfill;
 
   void main() {
     vec3 pos = position;
@@ -58,6 +71,7 @@ const vertexShader = /* glsl */ `
     pos.y += lift;
     vLift = lift;
     vRand = aRand;
+    vInfill = aInfill;
 
     vec4 mv = modelViewMatrix * vec4(pos, 1.0);
     gl_Position = projectionMatrix * mv;
@@ -76,10 +90,12 @@ const fragmentShader = /* glsl */ `
   uniform highp float uEnergy;
   uniform highp float uBloom;
   uniform highp float uOpacity;
+  uniform highp float uDensity;  // 0 the original field, 1 every line lit
 
   varying float vLift;
   varying float vRand;
   varying float vRadial;
+  varying float vInfill;
 
   void main() {
     // Round, soft-edged points. Square dots read as "debug render".
@@ -101,30 +117,45 @@ const fragmentShader = /* glsl */ `
     float fade = 1.0 - smoothstep(0.42, 1.05, vRadial);
     float a = alpha * uOpacity * (0.3 + exposure * 0.9) * fade * (0.55 + vRand * 0.6);
 
+    // The in-between lines are held back until the colour exists, and even then
+    // sit a little under the original ones — the field gets denser without the
+    // rows losing the reading that there are rows.
+    a *= mix(1.0, uDensity * 0.82, vInfill);
+
     gl_FragColor = vec4(colour, a);
   }
 `
 
-export default function DottedField({ colour, energy = 0, bloom = 0, opacity = 1 }) {
+export default function DottedField({
+  colour,
+  energy = 0,
+  bloom = 0,
+  opacity = 1,
+  density = 0,
+}) {
   const materialRef = useRef()
   const pointerTarget = useRef(new THREE.Vector3(0, 0, 60))
 
   const geometry = useMemo(() => {
     const positions = new Float32Array(COLS * ROWS * 3)
     const rands = new Float32Array(COLS * ROWS)
+    const infill = new Float32Array(COLS * ROWS)
     let i = 0
     for (let ix = 0; ix < COLS; ix++) {
       for (let iz = 0; iz < ROWS; iz++) {
         positions[i * 3] = (ix - COLS / 2) * SPACING
         positions[i * 3 + 1] = 0
-        positions[i * 3 + 2] = (iz - ROWS / 2) * SPACING
+        positions[i * 3 + 2] = (iz - ROWS / 2) * ROW_SPACING
         rands[i] = Math.random()
+        // Every other row is the new line between two old ones.
+        infill[i] = iz % 2
         i++
       }
     }
     const geo = new THREE.BufferGeometry()
     geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
     geo.setAttribute('aRand', new THREE.BufferAttribute(rands, 1))
+    geo.setAttribute('aInfill', new THREE.BufferAttribute(infill, 1))
     return geo
   }, [])
 
@@ -134,6 +165,7 @@ export default function DottedField({ colour, energy = 0, bloom = 0, opacity = 1
       uEnergy: { value: 0 },
       uBloom: { value: 0 },
       uOpacity: { value: 1 },
+      uDensity: { value: 0 },
       uSize: { value: 3.4 },
       uPointer: { value: new THREE.Vector3(0, 0, 60) },
       uColour: { value: new THREE.Color('#6b6f74') },
@@ -157,6 +189,9 @@ export default function DottedField({ colour, energy = 0, bloom = 0, opacity = 1
     ease(u.uEnergy, energy, 1.6)
     ease(u.uBloom, bloom, 2.2)
     ease(u.uOpacity, opacity, 3)
+    // Slower than the rest on purpose: the extra lines should be found rather
+    // than switched on, arriving over a couple of seconds while the name lands.
+    ease(u.uDensity, density, 0.9)
 
     u.uColour.value.lerp(colour, Math.min(1, dt * 2.4))
 
