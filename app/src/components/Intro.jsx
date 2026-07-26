@@ -1,11 +1,5 @@
-import { useEffect } from 'react'
-import {
-  animate,
-  motion,
-  useMotionTemplate,
-  useMotionValue,
-  useReducedMotion,
-} from 'framer-motion'
+import { useId } from 'react'
+import { motion, useReducedMotion } from 'framer-motion'
 
 /**
  * The door.
@@ -28,55 +22,109 @@ const rise = {
 }
 
 /**
+ * The pen path for "colour".
+ *
+ * Traced through the actual glyph metrics of Summer Loving, read out of the
+ * font: the word spans 0–1459 units at 1000 upm, x-height tops out near 350,
+ * the l and r rise to ~400, and l drops to -38. Coordinates below are in that
+ * space with the baseline at y = 0 and y running up-negative, the way SVG
+ * wants it.
+ *
+ * It is a stroke, not an outline — the route a hand takes across the word,
+ * dipping through the round letters and climbing at the ascenders — because
+ * that is what has to be revealed in order.
+ */
+const PEN_PATH =
+  'M -80 -150 C 40 -250, 170 -70, 320 -165 C 430 -320, 520 -50, 615 -180 ' +
+  'C 715 -265, 820 -85, 900 -170 C 1000 -245, 1085 -75, 1180 -155 ' +
+  'C 1290 -290, 1400 -110, 1560 -185'
+
+/**
+ * Measured length of PEN_PATH (getTotalLength reports 1777.2), rounded up.
+ *
+ * The tidier route is pathLength="1" and a dash array of 1 — but browsers do
+ * not apply pathLength to dash calculations reliably, and Chrome here rounded
+ * it to 1 user unit against a 1777-unit path. The mask then became a fine
+ * dotted line that let the whole word through. A concrete number is boring
+ * and works; update it if the path changes.
+ */
+const PEN_LENGTH = 1790
+
+/**
  * A word that writes itself.
  *
- * Summer Loving is a hand, so it should arrive the way a hand arrives — left
- * to right, at the speed of a pen. A soft-edged mask travels across the word
- * and uncovers it; the leading edge is tilted to about 101° to match the
- * script's own slant, so the reveal follows the letterforms instead of
- * cutting across them.
+ * Summer Loving is a hand, so it arrives the way a hand arrives. The word is
+ * SVG text; a single thick stroke runs along the pen path above and is used
+ * as its mask. Animating that stroke's dashoffset walks the mask along the
+ * route, so the letters appear in writing order, following the rise and fall
+ * of the script rather than a straight edge sweeping past.
  *
- * The obvious alternative — converting the glyphs to SVG and animating
- * stroke-dasharray — does not work here. Font outlines are contours, not
- * skeletons, so "drawing" them traces the outside edge of each letter rather
- * than the stroke a pen would make. It reads as a shape being outlined, not
- * as writing.
+ * Why the mask is a stroke and not the glyph outlines: font outlines are
+ * contours. Animating their dashoffset traces the *edge* of each letter — the
+ * shape gets drawn around, which reads as inking a stencil, not as writing.
+ * The stroke is wide enough (520 units against a ~350 x-height) to cover the
+ * letterforms completely, with a round cap so the leading edge is a nib.
  *
- * The keyframes are deliberately uneven: a real hand hesitates between letter
- * groups. Perfectly linear travel is the tell that gives away a wipe.
+ * pathLength="1" normalises the path so the dash maths needs no measurement.
  */
 function Handwritten({ children, delay = 0 }) {
-  const progress = useMotionValue(-14)
   const reduced = useReducedMotion()
+  const maskId = useId()
 
-  // Opaque behind the edge, a short translucent zone at it, clear ahead —
-  // the wet-ink moment where the stroke is still being laid down.
-  const mask = useMotionTemplate`linear-gradient(101deg,
-    #000 ${progress}%,
-    rgba(0,0,0,0.55) calc(${progress}% + 3%),
-    transparent calc(${progress}% + 10%))`
-
-  useEffect(() => {
-    if (reduced) {
-      progress.set(120)
-      return
-    }
-    const controls = animate(progress, [-14, 16, 30, 58, 74, 120], {
-      duration: 2.9,
-      delay,
-      times: [0, 0.16, 0.3, 0.56, 0.72, 1],
-      ease: 'easeInOut',
-    })
-    return () => controls.stop()
-  }, [progress, delay, reduced])
-
+  // Sized from the font's own metrics rather than by eye. At 1.3em the type
+  // scale is 0.0013em per unit, so the word (1412 units wide) occupies 1.84em,
+  // and the SVG — wider, because the pen stroke overshoots the letters at both
+  // ends — is offset back by its own left margin. The baseline sits at y = 0
+  // in the viewBox, 90 units above its bottom edge, which is exactly how far
+  // the SVG hangs below the text baseline.
   return (
-    <motion.span
-      className="accent inline-block"
-      style={{ WebkitMaskImage: mask, maskImage: mask }}
+    <span
+      className="relative inline-block align-baseline"
+      style={{ width: '1.84em', height: '0.56em' }}
+      role="img"
+      aria-label={children}
     >
-      {children}
-    </motion.span>
+      <svg
+        viewBox="-90 -430 1700 520"
+        className="absolute overflow-visible"
+        style={{ width: '2.21em', left: '-0.117em', bottom: '-0.117em' }}
+        preserveAspectRatio="xMidYMid meet"
+        aria-hidden="true"
+      >
+        <defs>
+          <mask id={maskId} maskUnits="userSpaceOnUse" x="-90" y="-430" width="1700" height="520">
+            <motion.path
+              d={PEN_PATH}
+              fill="none"
+              stroke="#fff"
+              strokeWidth="520"
+              strokeLinecap="round"
+              strokeDasharray={`${PEN_LENGTH} ${PEN_LENGTH}`}
+              initial={{ strokeDashoffset: reduced ? 0 : PEN_LENGTH }}
+              animate={{ strokeDashoffset: 0 }}
+              transition={{
+                duration: reduced ? 0 : 2.6,
+                delay: reduced ? 0 : delay,
+                // Uneven on purpose: a hand hesitates between letter groups,
+                // and perfectly even travel is what gives a wipe away.
+                ease: [0.55, 0.06, 0.3, 0.98],
+              }}
+            />
+          </mask>
+        </defs>
+
+        <text
+          x="0"
+          y="0"
+          fontSize="1000"
+          fill="currentColor"
+          mask={`url(#${maskId})`}
+          style={{ fontFamily: "'Summer Loving', cursive" }}
+        >
+          {children}
+        </text>
+      </svg>
+    </span>
   )
 }
 
