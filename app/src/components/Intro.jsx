@@ -174,13 +174,31 @@ function Screens() {
 
 export default function Intro({ onBegin }) {
   return (
+    /*
+      The door has to survive a phone.
+
+      The mark is fixed in the corner while this panel centres itself in the
+      whole viewport, and on a phone this content is about as tall as the
+      screen — so the opening line was landing across the logo. Two things fix
+      it. The vertical padding reserves the mark's band, so however tall the
+      content grows it cannot reach the corner. And `m-auto` on the inner block
+      does the centring rather than `justify-center`: it centres while there is
+      room and stops when there is not, where justify-center would push the top
+      of the content off the screen and out of reach. On the shortest phones
+      the panel scrolls instead of squeezing the typography.
+
+      Pointer events come back on for that scroll, but only below `sm` — above
+      it the panel stays transparent to the pointer so the field behind keeps
+      answering the cursor.
+    */
     <motion.section
-      className="pointer-events-none fixed inset-0 z-30 flex flex-col items-center justify-center px-6 text-center"
+      className="fade-under-mark pointer-events-auto fixed inset-0 z-30 flex overflow-y-auto overscroll-contain px-6 py-16 text-center sm:pointer-events-none sm:overflow-visible sm:py-8"
       exit={{ opacity: 0, filter: 'blur(14px)', scale: 1.04 }}
       transition={{ duration: 1, ease }}
     >
+      <div className="m-auto flex w-full flex-col items-center">
       <motion.p
-        className="label mb-10 text-[9px] leading-relaxed text-dim sm:mb-14 sm:text-[11px]"
+        className="label mb-6 text-[9px] leading-relaxed text-dim sm:mb-14 sm:text-[11px]"
         variants={rise}
         initial="hidden"
         animate="show"
@@ -228,7 +246,7 @@ export default function Intro({ onBegin }) {
 
       {/* Both conditions for the good version, before the button appears. */}
       <motion.div
-        className="mt-12 flex flex-col items-center gap-7 text-chalk/55 sm:mt-14 sm:flex-row sm:gap-12"
+        className="mt-9 flex flex-col items-center gap-6 text-chalk/55 sm:mt-14 sm:flex-row sm:gap-12"
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 1.2, delay: 1.5, ease }}
@@ -261,7 +279,7 @@ export default function Intro({ onBegin }) {
       <motion.button
         type="button"
         onClick={onBegin}
-        className="group pointer-events-auto relative mt-12 overflow-hidden rounded-full border border-white/15 px-11 py-4 text-chalk transition-colors duration-500 hover:border-white/40 sm:mt-14"
+        className="group pointer-events-auto relative mt-9 overflow-hidden rounded-full border border-white/15 px-11 py-4 text-chalk transition-colors duration-500 hover:border-white/40 sm:mt-14"
         initial={{ opacity: 0, y: 20, filter: 'blur(8px)' }}
         animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
         transition={{ duration: 1.2, delay: 3.2, ease }}
@@ -277,13 +295,14 @@ export default function Intro({ onBegin }) {
       </motion.button>
 
       <motion.p
-        className="mt-7 text-[0.8rem] font-light text-dim"
+        className="mt-5 text-[0.8rem] font-light text-dim sm:mt-7"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 1.4, delay: 3.9, ease }}
       >
         Takes about two minutes.
       </motion.p>
+      </div>
     </motion.section>
   )
 }

@@ -135,6 +135,23 @@ body {
   background-repeat: repeat;
 }
 
+/*
+  On a short phone the intro is taller than the screen and scrolls. The mark
+  sits fixed in the corner with nothing behind it, so scrolling text would run
+  straight across the wordmark. Fading the top of the scroll area means the
+  content dissolves just before it gets there — and at rest, where nothing is
+  scrolled into that band anyway, it is invisible.
+*/
+@media (max-width: 639px) {
+  .fade-under-mark {
+    /* Nothing at all through the mark's band (it ends at 48px), then a soft
+       ramp back in below it — a fade that merely starts at the top still
+       leaves the headline legible right across the wordmark. */
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, transparent 46px, #000 106px);
+    mask-image: linear-gradient(to bottom, transparent 0, transparent 46px, #000 106px);
+  }
+}
+
 /* Vignette keeps the eye centred and stops the WebGL field feeling like a rug. */
 .vignette {
   position: fixed;
