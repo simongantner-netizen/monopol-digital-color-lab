@@ -254,7 +254,7 @@ export default function Intro({ onBegin }) {
         animate="show"
         custom={3}
       >
-        Answer four. We will mix the rest – the way we would if you were standing
+        Answer four questions. We will mix the rest – the way we would if you were standing
         in the lab with us.
       </motion.p>
 
