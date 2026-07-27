@@ -20,8 +20,8 @@ export default function ColourName({ name, onRename, size = 'large', className =
 
   const scale =
     size === 'large'
-      ? 'text-[clamp(2.4rem,6.4vw,5rem)] leading-[0.95] tracking-[-0.035em]'
-      : 'text-[clamp(2rem,5vw,3.2rem)] leading-[1] tracking-[-0.03em]'
+      ? 'text-[clamp(2.4rem,min(6.4vw,9vh),5rem)] leading-[0.95] tracking-[-0.035em]'
+      : 'text-[clamp(2rem,min(5vw,7vh),3.2rem)] leading-[1] tracking-[-0.03em]'
 
   const focus = () => {
     inputRef.current?.focus()

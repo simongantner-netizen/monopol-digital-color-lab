@@ -101,7 +101,15 @@ export default function Reveal({ formula, answers, tweaks, onRefine, onRename, o
 
   return (
     <motion.section
-      className="pointer-events-none fixed inset-0 z-30 flex flex-col items-center justify-between px-6 py-8 text-center sm:py-11"
+      /*
+        Same safety net as the door. `justify-between` is right when there is
+        room and dangerous when there is not: on a short laptop it pushes the
+        name up under the mark and the button down past the fold, with no way
+        to reach either. Scrolling costs nothing when everything fits, and is
+        the difference between a usable screen and a broken one when it does
+        not.
+      */
+      className="no-scrollbar fixed inset-0 z-30 flex flex-col items-center justify-between overflow-y-auto overscroll-contain px-6 py-[clamp(2rem,4vh,2.75rem)] text-center"
       exit={{ opacity: 0, filter: 'blur(12px)' }}
       transition={{ duration: 0.6, ease }}
     >

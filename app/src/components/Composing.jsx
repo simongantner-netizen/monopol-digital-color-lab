@@ -24,7 +24,7 @@ export default function Composing({ formula }) {
         {STAGES.map((stage, i) => (
           <motion.span
             key={stage}
-            className="absolute text-[clamp(1.5rem,3vw,2.2rem)] font-light tracking-[-0.02em] text-chalk"
+            className="absolute text-[clamp(1.5rem,min(3vw,4.5vh),2.2rem)] font-light tracking-[-0.02em] text-chalk"
             initial={{ opacity: 0, y: 14, filter: 'blur(8px)' }}
             animate={{
               opacity: [0, 1, 1, 0],

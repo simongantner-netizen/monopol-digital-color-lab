@@ -116,6 +116,18 @@ export default function Stage({
     <Canvas
       className="!fixed inset-0"
       style={{ zIndex: 0 }}
+      /*
+        Listen on the document, not on the canvas.
+
+        Every phase now sits in a scrollable, interactive overlay — that is what
+        makes the interface survive a short screen — and an overlay that takes
+        pointer events is an overlay the canvas never hears through. Moving the
+        event source up means the field keeps feeling the cursor while the
+        panels above it stay usable. `client` because the coordinates are now
+        relative to the window rather than to the canvas box.
+      */
+      eventSource={typeof document === 'undefined' ? undefined : document.documentElement}
+      eventPrefix="client"
       dpr={[1, 2]}
       gl={{
         antialias: true,

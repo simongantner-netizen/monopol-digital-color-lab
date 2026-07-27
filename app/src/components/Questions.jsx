@@ -238,7 +238,7 @@ export default function Questions({ step, answers, onAnswer, onHover }) {
               {question.label}
             </p>
 
-            <h2 className="mx-auto max-w-[24ch] text-[clamp(1.6rem,3.6vw,2.9rem)] leading-[1.12] font-light tracking-[-0.025em] text-chalk text-balance">
+            <h2 className="mx-auto max-w-[24ch] text-[clamp(1.6rem,min(3.6vw,5.5vh),2.9rem)] leading-[1.12] font-light tracking-[-0.025em] text-chalk text-balance">
               {question.prompt}
             </h2>
 

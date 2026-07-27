@@ -175,30 +175,32 @@ function Screens() {
 export default function Intro({ onBegin }) {
   return (
     /*
-      The door has to survive a phone.
+      The door has to survive whatever it is opened on.
 
       The mark is fixed in the corner while this panel centres itself in the
-      whole viewport, and on a phone this content is about as tall as the
-      screen — so the opening line was landing across the logo. Two things fix
-      it. The vertical padding reserves the mark's band, so however tall the
-      content grows it cannot reach the corner. And `m-auto` on the inner block
-      does the centring rather than `justify-center`: it centres while there is
-      room and stops when there is not, where justify-center would push the top
-      of the content off the screen and out of reach. On the shortest phones
-      the panel scrolls instead of squeezing the typography.
+      whole viewport, so the padding reserves the mark's band and `m-auto` does
+      the centring rather than `justify-center` — it centres while there is room
+      and stops when there is not, where justify-center pushes the top of the
+      content off screen and out of reach.
 
-      Pointer events come back on for that scroll, but only below `sm` — above
-      it the panel stays transparent to the pointer so the field behind keeps
-      answering the cursor.
+      The scrolling used to be gated on width, on the assumption that only
+      phones run short. A thirteen-inch laptop is the counter-example: wide
+      enough to skip every `sm:` guard, and about 620px tall once the browser
+      has taken its share — which put the Begin button 214px below the fold of
+      a panel that had `overflow: visible` and `pointer-events: none`, so it
+      could not even be scrolled to. The safety net is unconditional now.
+
+      Heights below are in `vh` for the same reason: the rhythm has to give way
+      on a short screen, not just a narrow one.
     */
     <motion.section
-      className="fade-under-mark pointer-events-auto fixed inset-0 z-30 flex overflow-y-auto overscroll-contain px-6 py-16 text-center sm:pointer-events-none sm:overflow-visible sm:py-8"
+      className="fade-under-mark pointer-events-auto fixed inset-0 z-30 flex overflow-y-auto overscroll-contain px-6 py-[clamp(2.25rem,5vh,4rem)] text-center"
       exit={{ opacity: 0, filter: 'blur(14px)', scale: 1.04 }}
       transition={{ duration: 1, ease }}
     >
       <div className="m-auto flex w-full flex-col items-center">
       <motion.p
-        className="label mb-6 text-[9px] leading-relaxed text-dim sm:mb-14 sm:text-[11px]"
+        className="label mb-[clamp(0.75rem,2.4vh,3.5rem)] text-[9px] leading-relaxed text-dim sm:text-[11px]"
         variants={rise}
         initial="hidden"
         animate="show"
@@ -209,7 +211,7 @@ export default function Intro({ onBegin }) {
         <span className="inline-block">an immersive experience for the eyes and ears</span>
       </motion.p>
 
-      <h1 className="max-w-[19ch] text-[clamp(2.6rem,7.2vw,6.4rem)] leading-[0.98] font-light tracking-[-0.028em] text-chalk">
+      <h1 className="max-w-[19ch] text-[clamp(2.6rem,min(7.2vw,9.4vh),6.4rem)] leading-[0.98] font-light tracking-[-0.028em] text-chalk">
         {/*
           The middle line stays in ash rather than taking the emphasis, even
           though it carries the twist. Said quietly, "does not exist yet" is a
@@ -248,7 +250,7 @@ export default function Intro({ onBegin }) {
       </h1>
 
       <motion.p
-        className="mt-8 max-w-[34ch] text-[clamp(0.95rem,1.5vw,1.15rem)] leading-relaxed font-light text-ash sm:mt-10"
+        className="mt-[clamp(1rem,2.6vh,2.5rem)] max-w-[34ch] text-[clamp(0.95rem,1.5vw,1.15rem)] leading-relaxed font-light text-ash"
         variants={rise}
         initial="hidden"
         animate="show"
@@ -260,7 +262,7 @@ export default function Intro({ onBegin }) {
 
       {/* Both conditions for the good version, before the button appears. */}
       <motion.div
-        className="mt-9 flex flex-col items-center gap-6 text-chalk/55 sm:mt-14 sm:flex-row sm:gap-12"
+        className="mt-[clamp(1rem,3vh,3.5rem)] flex flex-col items-center gap-[clamp(1rem,2.5vh,1.5rem)] text-chalk/55 sm:flex-row sm:gap-12"
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 1.2, delay: 1.5, ease }}
@@ -293,7 +295,7 @@ export default function Intro({ onBegin }) {
       <motion.button
         type="button"
         onClick={onBegin}
-        className="group pointer-events-auto relative mt-9 overflow-hidden rounded-full border border-white/15 px-11 py-4 text-chalk transition-colors duration-500 hover:border-white/40 sm:mt-14"
+        className="group pointer-events-auto relative mt-[clamp(1rem,3vh,3.5rem)] overflow-hidden rounded-full border border-white/15 px-11 py-4 text-chalk transition-colors duration-500 hover:border-white/40"
         initial={{ opacity: 0, y: 20, filter: 'blur(8px)' }}
         animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
         transition={{ duration: 1.2, delay: 3.2, ease }}
@@ -309,7 +311,7 @@ export default function Intro({ onBegin }) {
       </motion.button>
 
       <motion.p
-        className="mt-5 text-[0.8rem] font-light text-dim sm:mt-7"
+        className="mt-[clamp(0.5rem,1.5vh,1.75rem)] text-[0.8rem] font-light text-dim"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 1.4, delay: 3.9, ease }}
