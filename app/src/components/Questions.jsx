@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { QUESTIONS } from '../lib/questions'
 import { composeFormula } from '../lib/colorEngine'
-import { oklchToCss, oklchToHex } from '../lib/oklch'
+import { clamp, oklchToCss } from '../lib/oklch'
 
 /**
  * The four questions.
@@ -48,48 +48,140 @@ const COLUMN_CLASS = {
 }
 
 /**
- * How each finish returns light, as a band across the card.
+ * Metallic flake, as a field of specks with no pattern in it.
  *
- * Question 04 asks a comparative question — how should yours hold it — and
- * every one of its five cards used to carry exactly the same wash, because
- * gloss and effect leave the colour untouched. Five identical tiles is the one
- * place the interface answered a question with a shrug.
+ * The first attempt at this stacked three tiled radial gradients at 5, 7 and
+ * 11 pixels, on the theory that co-prime periods would not line up. They line
+ * up immediately: every layer is still a lattice, and three lattices beating
+ * against each other produce a coarser one. The band read as a window screen,
+ * which is the single most artificial thing that has been on this screen.
  *
- * These are CSS, not the renderer: one canvas serves the whole app, and it
- * cannot be in five places at once. They are a hint, in the same way the
- * colour wash on every other card is a hint — the honest article is the panel
- * two screens later, under real light. What they have to do is make the
- * difference between matt and gloss visible at a glance, side by side, which
- * is what the question actually asks.
+ * Noise has no period, so there is nothing to beat. `feTurbulence` renders one
+ * irregular field, the alpha row of the matrix keeps only its brightest
+ * fraction, and what is left is a scatter of one-pixel glints. Costs one
+ * filter pass at paint time, ships as a string, and downloads nothing.
+ *
+ * The gain and offset were not guessed. Rendered into a canvas and counted,
+ * `6.5 / 4.4` covers 5.2% of the field, peaks at full white and leaves a
+ * quarter of a percent above alpha 150 — a sparse scatter with a few real
+ * glints in it. `3.4 / 1.78` covers forty per cent, which is not sparkle but
+ * haze. The field is 320 wide so it never repeats inside a card at any column
+ * count; a tile that repeated would put the lattice straight back.
  */
-const FINISH = {
-  // Light goes in and nothing comes out: no highlight anywhere.
-  swallow: (c) => `linear-gradient(160deg, ${c}e6 0%, ${c}cc 100%)`,
-  // Silk: one broad, soft sheen that never resolves into an edge.
-  soft: (c) =>
-    `linear-gradient(118deg, ${c}cc 0%, ${c}f2 34%, #ffffff26 52%, ${c}e6 72%, ${c}bf 100%)`,
-  // High gloss: a narrow specular streak with a dark surround, the way a wet
-  // surface hands the softbox straight back.
-  return: (c) =>
-    `linear-gradient(112deg, ${c}b3 0%, ${c}80 30%, #ffffff8c 44%, #ffffffd9 48%, ${c}99 58%, ${c}e6 100%)`,
-  // Iridescent: the hue walks across the band instead of the highlight.
-  break: (c) =>
-    `linear-gradient(105deg, ${c}d9 0%, #7de3ff73 26%, ${c}e6 48%, #ff9ad673 70%, ${c}d9 100%)`,
-  // Metallic flake: thousands of tiny mirrors, so thousands of tiny specks.
-  fire: (c) =>
-    `radial-gradient(circle at 22% 32%, #ffffffbf 0.6px, transparent 1.1px),` +
-    `radial-gradient(circle at 68% 71%, #ffffffa6 0.6px, transparent 1.1px),` +
-    `radial-gradient(circle at 44% 88%, #ffffff8c 0.5px, transparent 1px),` +
-    `linear-gradient(120deg, ${c}cc 0%, ${c}f2 46%, ${c}bf 100%)`,
+const SPARKLE_SVG = `<svg xmlns='http://www.w3.org/2000/svg' width='320' height='90'>
+<filter id='s' x='0' y='0' width='100%' height='100%' color-interpolation-filters='sRGB'>
+<feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='1' seed='11' stitchTiles='stitch'/>
+<feColorMatrix type='matrix' values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 6.5 0 0 0 -4.4'/>
+</filter>
+<rect width='320' height='90' filter='url(#s)'/>
+</svg>`
+
+const SPARKLE = `url("data:image/svg+xml,${encodeURIComponent(SPARKLE_SVG)}")`
+
+/**
+ * How each finish returns light, as a sample band across the foot of the card.
+ *
+ * Question 04 is comparative — how should yours hold it — so the five cards
+ * have to differ, and until recently they did not. The first fix went too far
+ * the other way and painted surfaces no coating can produce: a chrome streak
+ * for gloss, a cyan-to-magenta oil slick for iris, a dot grid for flake. The
+ * engine's own rule is a page away in `materialParams` — *the pigment has to
+ * survive every effect* — and these broke it. Worse, they were promises the
+ * panel two screens later does not keep, and a coatings manufacturer is
+ * exactly the visitor who would notice.
+ *
+ * So they are built from the colour itself now, on two rules:
+ *
+ *   The pigment stays.  Every layer is either the answer's own colour at a
+ *   different depth, or the same hue walked a few degrees. Nothing foreign is
+ *   introduced anywhere.
+ *
+ *   Light adds, it does not wash.  Highlights blend in `screen`, not as white
+ *   at some alpha over the top. White-over-colour desaturates — a 55% white
+ *   veil on a cinnabar gives grey-pink, which is why the old silk band looked
+ *   smeared. Screening lifts the colour toward a brighter version of itself
+ *   and only reaches white in the core, which is what a specular highlight
+ *   physically is.
+ *
+ * The strength of the sheen is the whole argument between matt and gloss: matt
+ * has none, silk has a wide weak one, gloss a narrow bright one over a deeper
+ * surround — a glossy surface reflects the dark room around its highlight, and
+ * that contrast reads as gloss far more than the highlight does. Which is also
+ * why the surround deepens further on pale colours than on dark ones.
+ *
+ * Still CSS, not the renderer: one canvas cannot be in five places. A hint, in
+ * the way the colour wash on every other card is a hint — but now a hint the
+ * real panel makes good on.
+ */
+const SURFACE = {
+  // Light goes in and nothing comes out. No sheen at all, and the only
+  // gradient is the fall of the light down the band.
+  swallow: (t, d) => ({ base: `linear-gradient(168deg, ${t(0.012 * d)} 0%, ${t(-0.05 * d)} 100%)` }),
+
+  // Silk: one broad sheen, soft enough that it never resolves into an edge.
+  // Its first version was so gentle it was indistinguishable from matt, which
+  // is the same shrug in quieter clothes — the answer has to be visible.
+  soft: (t, d) => ({
+    base: `linear-gradient(168deg, ${t(-0.005 * d)} 0%, ${t(-0.075 * d)} 100%)`,
+    sheen:
+      'radial-gradient(105% 185% at 30% -30%, #ffffff54 0%, #ffffff26 34%, #ffffff0a 62%, transparent 84%)',
+  }),
+
+  // High gloss: the same light gathered into a narrow core, and the surround
+  // dropped away behind it.
+  return: (t, d) => ({
+    base: `linear-gradient(168deg, ${t(-0.04 * d)} 0%, ${t(-0.14 * d)} 100%)`,
+    sheen:
+      'radial-gradient(46% 150% at 30% -12%, #ffffffbf 0%, #ffffff59 18%, #ffffff1c 40%, transparent 70%)',
+  }),
+
+  // Iridescent: the hue walks, and comes back. An interference pigment shifts
+  // the colour toward its neighbours and pastels as it goes — it does not hand
+  // you a spectrum. Twenty-six degrees each way is a flip you can see without
+  // ever leaving the family, and on a near-neutral pigment it correctly shows
+  // almost nothing: there is no chroma there to flip.
+  break: (t, d) => ({
+    base:
+      `linear-gradient(101deg, ${t(-0.01 * d)} 0%, ${t(0.055, 0.62, -26)} 28%, ` +
+      `${t(0)} 51%, ${t(0.055, 0.62, 26)} 76%, ${t(-0.015 * d)} 100%)`,
+    sheen: 'radial-gradient(125% 215% at 34% -42%, #ffffff26 0%, #ffffff10 46%, transparent 80%)',
+  }),
+
+  // Metallic flake: a gloss surface with the specks masked to where the light
+  // falls, because that is the only place a flake has anything to return.
+  fire: (t, d, l) => ({
+    base: `linear-gradient(168deg, ${t(-0.025 * d)} 0%, ${t(-0.1 * d)} 100%)`,
+    sheen:
+      'radial-gradient(90% 195% at 31% -32%, #ffffff6b 0%, #ffffff2b 32%, #ffffff0d 58%, transparent 82%)',
+    sparkle: 'radial-gradient(115% 240% at 31% -32%, #000 0%, #000000e6 40%, transparent 82%)',
+    // A white speck on a near-black pigment is the highest contrast anything
+    // on this screen can reach, and at full strength the band stops being a
+    // panel and becomes a starfield. Held back on the darks only.
+    glint: 0.6 + l * 0.4,
+  }),
 }
 
-const FINISH_SIZE = {
-  fire: '7px 7px, 11px 11px, 5px 5px, 100% 100%',
+/**
+ * The finish bands for one colour.
+ *
+ * `t` moves the colour in OKLCH — lightness, then optionally chroma and hue —
+ * so every shade in a band is the answer's own colour seen under more or less
+ * light. `d` deepens the fall on pale colours: white gloss lives almost
+ * entirely on how dark its surround goes, dark gloss on its highlight.
+ */
+const surfaceFor = (colour, id) => {
+  const t = (dl, dc = 1, dh = 0) =>
+    oklchToCss({
+      l: clamp(colour.l + dl, 0.03, 0.98),
+      c: Math.max(0, colour.c * dc),
+      h: (colour.h + dh + 360) % 360,
+    })
+  return SURFACE[id](t, 0.55 + colour.l * 0.8, colour.l)
 }
 
 function OptionCard({ option, question, index, selected, preview, onPick, onHover }) {
   const compact = question.columns >= 4
-  const finish = question.id === 'light' ? FINISH[option.id] : null
+  const finish = preview.surface
 
   return (
     <motion.button
@@ -138,15 +230,36 @@ function OptionCard({ option, question, index, selected, preview, onPick, onHove
         />
       )}
 
-      {/* On question 04 the edge grows into the surface itself. */}
+      {/*
+        On question 04 the edge grows into a sample of the surface itself.
+
+        `isolate` matters: the sheen and the specks blend in `screen`, and
+        without a stacking context of their own they would screen against the
+        card, the colour wash and the page behind it as well — which lights up
+        the whole tile instead of the sample.
+      */}
       {finish && (
-        <span
-          className="pointer-events-none absolute inset-x-0 bottom-0 h-11 opacity-85 transition-opacity duration-700 group-hover:opacity-100 sm:h-14"
-          style={{
-            backgroundImage: finish(preview.real),
-            backgroundSize: FINISH_SIZE[option.id] ?? undefined,
-          }}
-        />
+        <span className="pointer-events-none absolute inset-x-0 bottom-0 isolate h-11 overflow-hidden opacity-90 transition-opacity duration-700 group-hover:opacity-100 sm:h-14">
+          <span className="absolute inset-0" style={{ background: finish.base }} />
+          {finish.sheen && (
+            <span
+              className="absolute inset-0 mix-blend-screen"
+              style={{ background: finish.sheen }}
+            />
+          )}
+          {finish.sparkle && (
+            <span
+              className="absolute inset-0 mix-blend-screen"
+              style={{
+                backgroundImage: SPARKLE,
+                backgroundSize: '320px 90px',
+                maskImage: finish.sparkle,
+                WebkitMaskImage: finish.sparkle,
+                opacity: finish.glint,
+              }}
+            />
+          )}
+        </span>
       )}
 
       {option.time && (
@@ -203,9 +316,10 @@ export default function Questions({ step, answers, onAnswer, onHover }) {
               rest: legible(colour, 0.3),
               lit: legible(colour, 0.62),
               edge: legible(colour, 1, 0.56),
-              // The surface bands need the colour as it really is, and as a
-              // hex, because they layer alpha onto it.
-              real: oklchToHex(colour),
+              // Question 04 gets a sample of its finish instead of an edge,
+              // built from the colour as it really is — no legibility floor,
+              // because a band this size can carry a dark colour honestly.
+              surface: question.id === 'light' ? surfaceFor(colour, option.id) : null,
             },
           ]
         }),
