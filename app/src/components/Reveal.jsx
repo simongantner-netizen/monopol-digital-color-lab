@@ -25,6 +25,26 @@ const rise = {
   }),
 }
 
+/**
+ * The name gets its own arrival, not a slot in the queue.
+ *
+ * Everything on this screen used to share one variant, so the colour's name
+ * entered a tenth of a second apart from the footer — the same treatment for
+ * the payoff and for the small print. It comes out of further away now, takes
+ * longer to settle, and waits for the label above it to finish, so there is a
+ * beat of nothing before the thing everyone is here for.
+ */
+const arrive = {
+  hidden: { opacity: 0, y: 44, scale: 0.965, filter: 'blur(16px)' },
+  show: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    filter: 'blur(0px)',
+    transition: { duration: 1.6, delay: 1.35, ease },
+  },
+}
+
 /** Deep-equal enough for three numbers that all come from the same table. */
 const sameTweak = (a, b) =>
   !!a && !!b && a.hue === b.hue && a.lightness === b.lightness && a.chroma === b.chroma
@@ -85,18 +105,18 @@ export default function Reveal({ formula, answers, tweaks, onRefine, onRename, o
       exit={{ opacity: 0, filter: 'blur(12px)' }}
       transition={{ duration: 0.6, ease }}
     >
+      {/*
+        The door says the colour does not exist yet. This is the sentence that
+        answers it, and it has to be the same three words turned round — "Your
+        colour" was a caption on the most expensive moment in the experience,
+        and it closed nothing.
+      */}
       <motion.p className="label text-dim" variants={rise} initial="hidden" animate="show" custom={0}>
-        Your colour
+        It exists now
       </motion.p>
 
       <div className="flex w-full max-w-3xl flex-col items-center">
-        <motion.div
-          className="w-full"
-          variants={rise}
-          initial="hidden"
-          animate="show"
-          custom={1}
-        >
+        <motion.div className="w-full" variants={arrive} initial="hidden" animate="show">
           <ColourName name={formula.name} onRename={onRename} size="large" />
         </motion.div>
 

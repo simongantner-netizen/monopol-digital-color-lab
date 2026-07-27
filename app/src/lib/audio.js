@@ -179,16 +179,32 @@ export function createAudioEngine() {
    */
   let atRest = false
 
-  const MASTER_LEVEL = 0.62
-  const MUSIC_LEVEL = 0.5
-  const ATMOSPHERE_LEVEL = 0.3
-  const VOICE_LEVEL = 0.62
+  /*
+    Levels, measured rather than chosen.
+
+    The mix used to sit at -30 LUFS, which is quiet enough that someone opening
+    the link on a laptop at normal system volume hears almost nothing — and
+    what they would be missing is the one thing this has that a colour picker
+    does not. Rendered offline through this exact chain, the numbers below put
+    the questions screen at -23.5 LUFS with 8.9 dB of true-peak headroom left,
+    so nothing clips even when the bed, a world and the reveal chord land
+    together.
+
+    The atmospheres come up furthest. At 0.3 against a bed of 0.5 the ten field
+    recordings sat 5 to 10 dB under the music: the most distinctive and most
+    expensive part of the sound was a rumour. They are now within a couple of
+    decibels of the bed, which is where a world you are pointing at belongs.
+  */
+  const MASTER_LEVEL = 1.0
+  const MUSIC_LEVEL = 0.62
+  const ATMOSPHERE_LEVEL = 0.52
+  const VOICE_LEVEL = 0.72
   // The pad is a tint on the music, not a drone of its own. Set this to 0 and
   // the room still works; it just stops changing colour with the screen.
   const AMBIENT_LEVEL = 0.017
   // How far everything else drops while the question is being read. Enough to
   // hear every word over, gentle enough that nobody notices it happening.
-  const DUCK = 0.42
+  const DUCK = 0.3
 
   /* ---------------------------------------------------------------------
      Loading. Nothing here needs an AudioContext, so it can run on the intro

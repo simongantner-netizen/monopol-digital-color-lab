@@ -56,14 +56,11 @@ GitHub Pages und ist damit öffentlich abrufbar. Ersetzen heisst: neue Datei
 gleichen Namens ablegen, Länge in `LOOP_SECONDS.music` (`lib/audioAssets.js`)
 korrigieren, fertig.
 
-**Lionels E-Mail-Adresse eintragen** in `app/src/lib/contact.js`:
-
-```js
-email: 'colorlab@monopol-colors.ch', // ← Platzhalter
-```
-
-Der letzte Button erzeugt daraus eine fertig ausgefüllte Mail mit der ganzen
-Farbformel. Kein Backend nötig — funktioniert von jedem Gerät im Raum.
+Lionels echte Adresse ist eingetragen (`app/src/lib/contact.js`). Der letzte
+Button erzeugt daraus eine fertig ausgefüllte Mail mit der ganzen Farbformel
+und einem Link zurück auf genau diese Farbe. Kein Backend nötig, funktioniert
+von jedem Gerät im Raum — und falls kein Mailprogramm eingerichtet ist, stehen
+Adresse und „Link kopieren" sichtbar darunter.
 
 ---
 
@@ -95,7 +92,19 @@ tatsächlich spezifizieren: Weiss (Chalk), Beige (Dune), Gelb (Ochre), Orange
 (Kiln), Rot (Cinnabar), Rost (Patina), Grün (Lichen), Grünspan (Verdigris),
 Petrol (Fathom), Blau (Indigo), Violett (Threshold), Anthrazit (Basalt).
 
-Ergibt 960 Kombinationen, 48 Farbnamen (z. B. „Ember Kiln", „Nocturne Fathom").
+Ergibt 960 Kombinationen und 84 Farbnamen (z. B. „Ember Kiln", „Vivid Fathom").
+
+Der Name nimmt den Charakterzug der Antwort, die die Farbe am stärksten
+verschiebt: Whisper und Shout verändern sie weiter als jede Stunde, also
+benennen sie. Speak ist die neutrale Antwort und überlässt das Wort der Stunde.
+Die Referenz daneben trägt alle drei OKLCH-Werte (`MC 262 · 41 · 19`) und
+identifiziert die Farbe damit vollständig — ohne die Chroma-Stelle bekamen eine
+geflüsterte und eine geschriene Farbe dieselbe Nummer, obwohl sie um den
+Faktor fünf in der Sättigung auseinanderliegen.
+
+**Jede Farbe hat einen Link.** Der Zustand steht im URL-Hash (6 bis 66 Zeichen,
+versioniert), die Engine ist deterministisch — kein Backend. Ein geteilter Link
+öffnet direkt auf der Farbe.
 
 ---
 

@@ -19,6 +19,14 @@ import {
 } from './lib/colorEngine'
 import { oklchToHex } from './lib/oklch'
 import { createAudioEngine } from './lib/audio'
+import { decodeColour, writeHash } from './lib/share'
+
+/**
+ * A colour someone was sent, read out of the address bar before the first
+ * render — so a shared link opens on the colour instead of flashing the door
+ * and jumping.
+ */
+const SHARED = typeof window === 'undefined' ? null : decodeColour(window.location.hash)
 
 /**
  * Phases, in order.
@@ -57,15 +65,15 @@ const RESULT_PHASES = ['reveal', 'refine', 'finale']
 const VOICE_LOUDNESS = { whisper: 0, speak: 0.34, sing: 0.68, shout: 1 }
 
 export default function App() {
-  const [phase, setPhase] = useState('intro')
+  const [phase, setPhase] = useState(SHARED ? 'reveal' : 'intro')
   const [step, setStep] = useState(0)
-  const [answers, setAnswers] = useState(EMPTY_ANSWERS)
-  const [tweaks, setTweaks] = useState(NO_TWEAKS)
+  const [answers, setAnswers] = useState(SHARED?.answers ?? EMPTY_ANSWERS)
+  const [tweaks, setTweaks] = useState(SHARED?.tweaks ?? NO_TWEAKS)
   const [muted, setMuted] = useState(false)
   const [audioReady, setAudioReady] = useState(false)
   const [bloom, setBloom] = useState(0)
   const [preview, setPreview] = useState(null)
-  const [customName, setCustomName] = useState(null)
+  const [customName, setCustomName] = useState(SHARED?.customName ?? null)
 
   const audio = useRef(null)
   if (!audio.current) audio.current = createAudioEngine()
@@ -191,6 +199,33 @@ export default function App() {
    */
   useEffect(() => {
     audio.current.prefetch()
+  }, [])
+
+  /**
+   * The colour, written into the address bar as soon as there is one.
+   *
+   * replaceState rather than a hash assignment: a slider drag would otherwise
+   * push a hundred entries into the back button.
+   */
+  useEffect(() => {
+    if (!RESULT_PHASES.includes(phase)) return
+    writeHash(answers, tweaks, customName)
+  }, [phase, answers, tweaks, customName])
+
+  /**
+   * Someone arriving on a shared link never passed the door, so the audio was
+   * never unlocked — and a browser will not let it be, until they do
+   * something. The first thing they do, whatever it is, opens the room.
+   */
+  useEffect(() => {
+    if (!SHARED) return
+    const open = async () => {
+      await audio.current.start()
+      setAudioReady(true)
+    }
+    const events = ['pointerdown', 'keydown', 'touchend']
+    events.forEach((e) => window.addEventListener(e, open, { once: true, passive: true }))
+    return () => events.forEach((e) => window.removeEventListener(e, open))
   }, [])
 
   useEffect(() => () => audio.current?.dispose(), [])
@@ -423,6 +458,7 @@ export default function App() {
             key="finale"
             formula={formula}
             answers={answers}
+            tweaks={tweaks}
             slotRef={passportSlot}
             onRename={setCustomName}
             onRestart={restart}

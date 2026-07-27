@@ -1,7 +1,9 @@
+import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { getOption } from '../lib/questions'
 import { effectName } from '../lib/colorEngine'
 import { CONTACT, buildMailto } from '../lib/contact'
+import { shareUrl } from '../lib/share'
 import ColourName from './ColourName'
 import Signature from './Signature'
 
@@ -37,6 +39,7 @@ function Row({ label, value }) {
 export default function Finale({
   formula,
   answers,
+  tweaks,
   slotRef,
   onRestart,
   onBackToRefine,
@@ -50,6 +53,20 @@ export default function Finale({
   ].filter(Boolean)
 
   const { cmyk, colour } = formula
+
+  const link = shareUrl(answers ?? {}, tweaks ?? {}, formula.givenName ? formula.name : null)
+  const [copied, setCopied] = useState(false)
+
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(link)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2200)
+    } catch {
+      // Clipboard access can be refused outright; selecting the address below
+      // is the way out, and it is on screen either way.
+    }
+  }
 
   return (
     <motion.section
@@ -135,7 +152,7 @@ export default function Finale({
           custom={4}
         >
           <a
-            href={buildMailto(formula, recipe)}
+            href={buildMailto(formula, recipe, link)}
             className="group relative flex w-full items-center justify-between overflow-hidden rounded-full border border-white/15 py-4 pr-4 pl-8 transition-colors duration-500 hover:border-white/40"
           >
             <span
@@ -163,6 +180,29 @@ export default function Finale({
               </svg>
             </span>
           </a>
+
+          {/*
+            A mailto is a leap of faith: on a machine with no mail client set
+            up, clicking it does nothing at all, silently, at the one moment
+            the whole thing was built for. The link and the address are
+            therefore on screen as well — selectable, copyable, and useful even
+            to someone who just wants to keep their colour.
+          */}
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-x-6 gap-y-2 px-1">
+            <button
+              type="button"
+              onClick={copyLink}
+              className="label text-[10px] text-dim transition-colors duration-300 hover:text-chalk"
+            >
+              {copied ? 'Link copied' : 'Copy link to this colour'}
+            </button>
+            <a
+              href={`mailto:${CONTACT.email}`}
+              className="text-[0.74rem] font-light text-dim transition-colors duration-300 hover:text-ash"
+            >
+              {CONTACT.email}
+            </a>
+          </div>
 
           <a
             href={CONTACT.labUrl}

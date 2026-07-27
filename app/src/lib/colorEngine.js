@@ -95,27 +95,47 @@ export function composeFormula(answers = EMPTY_ANSWERS, tweaks = NO_TWEAKS) {
     css: oklchToCss(colour),
     cmyk: toCmyk(colour),
     surface: surfaceName(gloss),
-    name: composeName(world, hour),
+    name: composeName(world, voice, hour),
     code: composeCode(colour),
     complete: Boolean(world && voice && hour && light),
   }
 }
 
 /**
- * Two words: the hour, then the world. "Ember Kiln", "Nocturne Fathom".
- * The name is fixed by the four answers and survives refinement — the code
- * carries the numbers, the name carries the intent.
+ * Two words: a qualifier, then the world. "Ember Kiln", "Vivid Fathom".
+ *
+ * The qualifier goes to whichever answer changed the colour most. Whisper and
+ * Shout move it further than any hour does — a whispered Indigo and a shouted
+ * one are five times apart in chroma — so those take the name. Speak is the
+ * neutral answer and hands the qualifier back to the hour, which is then the
+ * thing that did the work.
+ *
+ * Two words, never three. A name a person will retype has to be sayable.
  */
-function composeName(world, hour) {
+function composeName(world, voice, hour) {
   if (!world) return 'Undecided'
-  return hour ? `${hour.name} ${world.name}` : world.name
+  const qualifier = voice?.name || hour?.name
+  return qualifier ? `${qualifier} ${world.name}` : world.name
 }
 
-/** Lab code: hue to three digits, lightness to two. Reads like a real sample. */
-function composeCode({ l, h }) {
+/**
+ * Lab code: hue to three digits, then lightness and chroma to two each.
+ *
+ * Chroma is here because without it the code was not a reference at all. Hue
+ * and lightness alone are blind to question 02, so a whispered colour and a
+ * shouted one — visibly a pale grey-blue and a saturated ultramarine — came
+ * out of the engine sharing one number. A reference that cannot tell two
+ * colours apart is worse than no reference: it is the one line on the passport
+ * an architect actually checks, and it was quietly wrong.
+ *
+ * With all three of OKLCH's components in it, the code now identifies the
+ * colour completely. The name carries the intent; this carries the colour.
+ */
+function composeCode({ l, c, h }) {
   const hue = String(Math.round(h)).padStart(3, '0')
   const lum = String(Math.round(l * 100)).padStart(2, '0')
-  return `MC ${hue} · ${lum}`
+  const chroma = String(Math.round(c * 100)).padStart(2, '0')
+  return `MC ${hue} · ${lum} · ${chroma}`
 }
 
 /**
