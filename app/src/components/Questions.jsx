@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { QUESTIONS } from '../lib/questions'
 import { composeFormula } from '../lib/colorEngine'
-import { oklchToCss } from '../lib/oklch'
+import { oklchToCss, oklchToHex } from '../lib/oklch'
 
 /**
  * The four questions.
@@ -24,13 +24,18 @@ import { oklchToCss } from '../lib/oklch'
  *
  * Basalt and Indigo are genuinely dark, and painted honestly at this size they
  * are indistinguishable from the card they sit on — the tint would be missing
- * in exactly the places it is most needed. Floors on lightness and chroma keep
- * every world's hue nameable at a glance; the truthful colour is what the
- * sample panel is for.
+ * in exactly the places it is most needed. So lightness gets a floor.
+ *
+ * Chroma barely gets one, and that is the correction. A floor of 0.028 was
+ * inventing saturation for worlds that have none: Basalt is all but
+ * achromatic at 0.009, and lifting it painted a violet-grey tile at hue 265 —
+ * near enough to Threshold's violet that the two sat side by side in the grid
+ * looking like the same answer twice. A neutral world should read neutral.
+ * The floor is now low enough only to stop a hue collapsing to pure grey.
  */
 const legible = (colour, alpha = 1, floor = 0.5) =>
   oklchToCss(
-    { ...colour, l: Math.max(colour.l, floor), c: Math.max(colour.c, 0.028) },
+    { ...colour, l: Math.max(colour.l, floor), c: Math.max(colour.c, 0.012) },
     alpha,
   )
 
@@ -42,8 +47,49 @@ const COLUMN_CLASS = {
   5: 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5',
 }
 
+/**
+ * How each finish returns light, as a band across the card.
+ *
+ * Question 04 asks a comparative question — how should yours hold it — and
+ * every one of its five cards used to carry exactly the same wash, because
+ * gloss and effect leave the colour untouched. Five identical tiles is the one
+ * place the interface answered a question with a shrug.
+ *
+ * These are CSS, not the renderer: one canvas serves the whole app, and it
+ * cannot be in five places at once. They are a hint, in the same way the
+ * colour wash on every other card is a hint — the honest article is the panel
+ * two screens later, under real light. What they have to do is make the
+ * difference between matt and gloss visible at a glance, side by side, which
+ * is what the question actually asks.
+ */
+const FINISH = {
+  // Light goes in and nothing comes out: no highlight anywhere.
+  swallow: (c) => `linear-gradient(160deg, ${c}e6 0%, ${c}cc 100%)`,
+  // Silk: one broad, soft sheen that never resolves into an edge.
+  soft: (c) =>
+    `linear-gradient(118deg, ${c}cc 0%, ${c}f2 34%, #ffffff26 52%, ${c}e6 72%, ${c}bf 100%)`,
+  // High gloss: a narrow specular streak with a dark surround, the way a wet
+  // surface hands the softbox straight back.
+  return: (c) =>
+    `linear-gradient(112deg, ${c}b3 0%, ${c}80 30%, #ffffff8c 44%, #ffffffd9 48%, ${c}99 58%, ${c}e6 100%)`,
+  // Iridescent: the hue walks across the band instead of the highlight.
+  break: (c) =>
+    `linear-gradient(105deg, ${c}d9 0%, #7de3ff73 26%, ${c}e6 48%, #ff9ad673 70%, ${c}d9 100%)`,
+  // Metallic flake: thousands of tiny mirrors, so thousands of tiny specks.
+  fire: (c) =>
+    `radial-gradient(circle at 22% 32%, #ffffffbf 0.6px, transparent 1.1px),` +
+    `radial-gradient(circle at 68% 71%, #ffffffa6 0.6px, transparent 1.1px),` +
+    `radial-gradient(circle at 44% 88%, #ffffff8c 0.5px, transparent 1px),` +
+    `linear-gradient(120deg, ${c}cc 0%, ${c}f2 46%, ${c}bf 100%)`,
+}
+
+const FINISH_SIZE = {
+  fire: '7px 7px, 11px 11px, 5px 5px, 100% 100%',
+}
+
 function OptionCard({ option, question, index, selected, preview, onPick, onHover }) {
   const compact = question.columns >= 4
+  const finish = question.id === 'light' ? FINISH[option.id] : null
 
   return (
     <motion.button
@@ -53,7 +99,11 @@ function OptionCard({ option, question, index, selected, preview, onPick, onHove
       onFocus={() => onHover(option.id)}
       onMouseLeave={() => onHover(null)}
       onBlur={() => onHover(null)}
-      className="group relative flex flex-col overflow-hidden rounded-xl border border-white/[0.07] bg-white/[0.015] p-5 text-left backdrop-blur-[2px] transition-all duration-500 hover:border-white/25 focus-visible:border-white/40 focus-visible:outline-none sm:rounded-2xl sm:p-6"
+      className={`group relative flex flex-col overflow-hidden rounded-xl border border-white/[0.07] bg-white/[0.015] p-5 text-left backdrop-blur-[2px] transition-all duration-500 hover:border-white/25 focus-visible:border-white/40 focus-visible:outline-none sm:rounded-2xl sm:p-6 ${
+        // The surface band owns the foot of the card, so the caption moves up
+        // out of its way rather than sitting on top of a gloss highlight.
+        finish ? 'pb-16 sm:pb-20' : ''
+      }`}
       initial={{ opacity: 0, y: 22, filter: 'blur(8px)' }}
       animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
       transition={{ duration: 0.85, delay: 0.28 + index * 0.07, ease }}
@@ -81,10 +131,23 @@ function OptionCard({ option, question, index, selected, preview, onPick, onHove
         }}
       />
       {/* The edge states the colour outright, for the worlds too dark to wash. */}
-      <span
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-[2px] opacity-70 transition-opacity duration-700 group-hover:opacity-100"
-        style={{ background: preview.edge }}
-      />
+      {!finish && (
+        <span
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-[2px] opacity-70 transition-opacity duration-700 group-hover:opacity-100"
+          style={{ background: preview.edge }}
+        />
+      )}
+
+      {/* On question 04 the edge grows into the surface itself. */}
+      {finish && (
+        <span
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-11 opacity-85 transition-opacity duration-700 group-hover:opacity-100 sm:h-14"
+          style={{
+            backgroundImage: finish(preview.real),
+            backgroundSize: FINISH_SIZE[option.id] ?? undefined,
+          }}
+        />
+      )}
 
       {option.time && (
         <span className="tnum label relative mb-3 text-[10px] text-dim transition-colors duration-500 group-hover:text-ash">
@@ -140,6 +203,9 @@ export default function Questions({ step, answers, onAnswer, onHover }) {
               rest: legible(colour, 0.3),
               lit: legible(colour, 0.62),
               edge: legible(colour, 1, 0.56),
+              // The surface bands need the colour as it really is, and as a
+              // hex, because they layer alpha onto it.
+              real: oklchToHex(colour),
             },
           ]
         }),

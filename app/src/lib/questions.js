@@ -98,11 +98,19 @@ export const QUESTIONS = [
         base: { l: 0.36, c: 0.115, h: 262 },
       },
       {
+        /*
+          Properly violet now, and truer for it. Astronomical twilight really
+          is violet — the sky between night and sunrise sits around this hue,
+          and at chroma 0.05 the world was too washed out to say so. It also
+          sat within a few RGB points of Basalt in the grid, so two adjacent
+          cards read as the same answer asked twice. This is the palette's
+          violet family; a façade range without one has a hole in it.
+        */
         id: 'threshold',
         title: 'The pause between night and morning',
         caption: 'Neither dark nor light',
         name: 'Threshold',
-        base: { l: 0.44, c: 0.05, h: 278 },
+        base: { l: 0.44, c: 0.105, h: 300 },
       },
       {
         id: 'basalt',
