@@ -46,7 +46,19 @@ export const surfaceName = (gloss) =>
  * changed; only the box it arrived in.
  */
 const FILM_PEARL = [120, 520]
-const FILM_IRIS = [260, 400]
+/*
+  A hundred and ten nanometres, starting at 270.
+
+  The span has to stay inside one order or the same hue appears twice on one
+  face, and concentric repeats are exactly what makes a surface read as a soap
+  bubble instead of a lacquer. One full turn is λ/(2n): at the film index below
+  that is 138 nm, so 110 is four-fifths of a turn — the colour walks once
+  across the panel and repeats nowhere.
+
+  This narrowed when the film index rose. The two numbers are not independent,
+  and a range tuned against the old index would have banded against the new one.
+*/
+const FILM_IRIS = [270, 380]
 
 export const EFFECTS = [
   { id: 'none', name: 'Pure', caption: 'Pigment only' },
@@ -247,15 +259,27 @@ export function materialParams({ colour, gloss, effect }) {
     */
     case 'iridescent':
       /*
-        A hundred and forty nanometres, starting at 260.
+        The film index is the whole effect, and 1.6 was very nearly nothing.
 
-        At IOR 1.6 a full turn through the hues takes about 172 nm, so 140 is
-        four-fifths of one turn: the colour walks once across the panel and
-        repeats nowhere. Past roughly 250 nm the same hue appears twice on one
-        face, and concentric repeats are precisely what makes a surface read as
-        a soap bubble rather than as a lacquer.
+        Interference happens at the boundary between the film and what is under
+        it, and the strength of that boundary is the square of the index
+        mismatch. A film at 1.6 sitting on a binder at 1.58 reflects 0.000040 of
+        what reaches it: optically the film was not there at all. Measured on
+        the built panel, the hue spread across the face was 4.5 degrees against
+        3.0 for no effect at all — inside the noise. "Break it into colours"
+        broke nothing.
+
+        Worse, that was self-inflicted. Raising the binder from 1.50 to 1.58 to
+        brighten the specular collapsed the mismatch by a factor of twenty-six
+        in the same edit that was supposed to make this visible.
+
+        Real interference pigment is mica coated in rutile titanium dioxide,
+        which sits near 2.6 and returns 0.0595 — a hundred and fifty times the
+        old boundary. Two is deliberately short of that: three hundred and forty
+        times stronger than before, still well under what the pigment on the
+        shelf actually does. Visible, and quieter than the real thing.
       */
-      return { ...base, iridescence: 0.55, iridescenceIOR: 1.6, ior: 1.58, film: FILM_IRIS }
+      return { ...base, iridescence: 0.55, iridescenceIOR: 2.0, ior: 1.58, film: FILM_IRIS }
     /*
       Flake takes no metalness — but not for the reason first written here.
 
