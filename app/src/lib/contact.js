@@ -9,7 +9,12 @@ import { effectName } from './colorEngine.js'
 export const CONTACT = {
   name: 'Lionel Schlessinger',
   role: 'Owner & CEO, Monopol Colors',
-  email: 'L.Schlessinger@monopol-colors.ch',
+  // Verified 29.07.2026 against Monopol's own contact page, which publishes it
+  // in exactly this form. It had been carried here with a capital L — which no
+  // mail server would have minded, but a guessed address and a checked one look
+  // identical until the mail bounces, and this one is the last step of the
+  // whole experience.
+  email: 'l.schlessinger@monopol-colors.ch',
   labUrl: 'https://www.monopol-colors.ch/de/kompetenz/colordesign/',
 }
 
