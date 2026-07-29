@@ -35,6 +35,19 @@ const SURFACE_STOPS = [
 export const surfaceName = (gloss) =>
   SURFACE_STOPS.find((s) => gloss <= s.at + 0.001)?.name ?? 'High gloss'
 
+/**
+ * Interference film thickness ranges, as module constants rather than literals
+ * inside `materialParams`.
+ *
+ * An array written inline is a new array every call, and `materialParams` is
+ * called on every render. The panel keys its map-swap effect off these, so a
+ * fresh identity meant the effect re-ran — and asked three for a material
+ * update — on every pixel of every slider drag. Nothing about the film had
+ * changed; only the box it arrived in.
+ */
+const FILM_PEARL = [120, 520]
+const FILM_IRIS = [260, 400]
+
 export const EFFECTS = [
   { id: 'none', name: 'Pure', caption: 'Pigment only' },
   { id: 'pearl', name: 'Pearl', caption: 'Soft inner shimmer' },
@@ -209,7 +222,7 @@ export function materialParams({ colour, gloss, effect }) {
         ...base,
         sheen: 0.7,
         iridescence: 0.16,
-        film: [120, 520],
+        film: FILM_PEARL,
         envMapIntensity: base.envMapIntensity + 0.15,
       }
     case 'metallic':
@@ -242,7 +255,7 @@ export function materialParams({ colour, gloss, effect }) {
         face, and concentric repeats are precisely what makes a surface read as
         a soap bubble rather than as a lacquer.
       */
-      return { ...base, iridescence: 0.55, iridescenceIOR: 1.6, ior: 1.58, film: [260, 400] }
+      return { ...base, iridescence: 0.55, iridescenceIOR: 1.6, ior: 1.58, film: FILM_IRIS }
     /*
       Flake takes no metalness — but not for the reason first written here.
 

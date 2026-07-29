@@ -522,9 +522,52 @@ export function createAudioEngine() {
     musicTone.gain.setTargetAtTime(tilt, now, glide * 0.6)
   }
 
+  /**
+   * How often the room is allowed to retune, in milliseconds.
+   *
+   * The glide is 2.2 seconds. Anything faster than about fifteen retunes a
+   * second is inaudible by construction — it is overwritten long before it is
+   * heard — so this costs nothing and buys back the audio thread.
+   */
+  const RETUNE_MS = 70
+  let lastRetune = 0
+  let retuneTimer = null
+
+  /**
+   * The colour, as the room hears it. Scheduled, not immediate.
+   *
+   * A slider drag in the refine bench changes the colour on every pointer
+   * event — a hundred and twenty times a second — and each retune wrote five
+   * automation events onto the same handful of AudioParams. Measured during a
+   * two-second drag: twelve hundred `setTargetAtTime` calls, six hundred a
+   * second. The audio thread walks that timeline every render quantum, so the
+   * room begins to stutter at exactly the moment someone is listening for what
+   * their adjustment did to it. It is the one screen where the colour changes
+   * continuously, which is why it was the only screen that misbehaved.
+   *
+   * Coalescing rather than dropping: the trailing call carries whatever the
+   * colour ended up being, so letting go of a slider always lands on the right
+   * note rather than on the last one that happened to fit the window.
+   */
   function setColour(next) {
     colour = next
-    applyColour()
+    if (!ctx || !started) return
+
+    const now = performance.now()
+    const since = now - lastRetune
+
+    if (since >= RETUNE_MS) {
+      lastRetune = now
+      applyColour()
+      return
+    }
+
+    if (retuneTimer) return
+    retuneTimer = setTimeout(() => {
+      retuneTimer = null
+      lastRetune = performance.now()
+      applyColour()
+    }, RETUNE_MS - since)
   }
 
   function setAtRest(next) {
@@ -828,6 +871,7 @@ export function createAudioEngine() {
 
   function dispose() {
     clearTimeout(unduckTimer)
+    clearTimeout(retuneTimer)
     stopAtmosphere(0)
     if (!ctx) return
     voices.forEach(({ osc }) => {

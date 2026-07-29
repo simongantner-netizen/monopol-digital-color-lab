@@ -139,9 +139,17 @@ export default function App() {
   }, [formula.css])
 
   /* --- ...and the pitch of the room --------------------------------------- */
+  /*
+    Keyed on the three numbers, not on the object that holds them.
+
+    `formula.colour` is rebuilt on every render, so React saw a change every
+    time anything moved — including the gloss slider, which does not touch the
+    colour at all. Dragging gloss was retuning the room a hundred and twenty
+    times a second to the note it was already playing.
+  */
   useEffect(() => {
     audio.current.setColour(formula.colour)
-  }, [formula.colour])
+  }, [formula.colour.l, formula.colour.c, formula.colour.h])
 
   useEffect(() => {
     audio.current.setMuted(muted)

@@ -49,6 +49,9 @@ const DRIFT = 0.07
 /** Scratch matrix for the reach measurement — the frame loop allocates nothing. */
 const clampMatrix = new THREE.Matrix4()
 
+/** Film thickness for the finishes that carry no interference layer of their own. */
+const FILM_DEFAULT = [120, 520]
+
 /**
  * Lay each map across the panel the number of times it was designed for.
  *
@@ -329,6 +332,35 @@ export default function Specimen({
     const metallic = params.effect === 'metallic'
 
     material.normalMap = glitter ? flake.normal : metallic ? brushed : tooth
+
+    // Only the flake lacquer has two surfaces in it — polished platelets in a
+    // binder that stays exactly as matt as the gloss slider left it.
+    material.roughnessMap = glitter ? flake.roughness : null
+
+    // Pearl carries a little iridescence too, but as an even inner glow. The
+    // varying film belongs to the interference lacquer alone.
+    material.iridescenceThicknessMap = params.effect === 'iridescent' ? film : null
+
+    material.needsUpdate = true
+  }, [params.effect, flake, brushed, tooth, film])
+
+  /*
+    Everything that only changes a number, kept apart from the swap above.
+
+    These are uniforms: setting them costs nothing and needs no material update.
+    Bundled in with the map swap they inherited its `needsUpdate`, and because
+    the flake guard follows the colour and the film range arrived as a fresh
+    array each render, that fired on every pixel of every slider drag. Three
+    then rebuilt its program parameters and cache key each time for a material
+    whose shader had not changed at all.
+  */
+  useEffect(() => {
+    const material = materialRef.current
+    if (!material) return
+
+    const glitter = params.effect === 'glitter'
+    const metallic = params.effect === 'metallic'
+
     /*
       The flake's tilt may now have its nominal strength: at the old tiling a
       high value bought nothing but aliasing, so it had been held back.
@@ -343,19 +375,11 @@ export default function Specimen({
     const scale = glitter ? 0.9 * (params.flake ?? 1) : metallic ? 0.28 : 0.06
     material.normalScale.set(scale, scale)
 
-    // Only the flake lacquer has two surfaces in it — polished platelets in a
-    // binder that stays exactly as matt as the gloss slider left it.
-    material.roughnessMap = glitter ? flake.roughness : null
-
-    // Pearl carries a little iridescence too, but as an even inner glow. The
-    // varying film belongs to the interference lacquer alone — and each of them
-    // keeps its own thickness, because three reads the maximum of this range
-    // whenever there is no map and one shared range would retune both at once.
-    material.iridescenceThicknessMap = params.effect === 'iridescent' ? film : null
-    material.iridescenceThicknessRange = params.film ?? [120, 520]
-
-    material.needsUpdate = true
-  }, [params.effect, params.flake, params.film, flake, brushed, tooth, film])
+    // Each effect keeps its own film thickness: three reads the maximum of this
+    // range whenever there is no map, so one shared range would silently retune
+    // pearl every time the interference lacquer was adjusted.
+    material.iridescenceThicknessRange = params.film ?? FILM_DEFAULT
+  }, [params.effect, params.flake, params.film])
 
   useFrame((state, delta) => {
     const dt = Math.min(delta, 0.05)
