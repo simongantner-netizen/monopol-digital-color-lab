@@ -228,11 +228,31 @@ export default function App() {
    * Trailing is also simply right. Nobody reads the address bar mid-drag; the
    * link has to be correct the moment the hand stops.
    */
+  /*
+    The pending timer is held in a ref and cleared at the top of every run,
+    rather than through the effect's own cleanup. Both are correct; this one is
+    correct without depending on when React chooses to run a cleanup, and there
+    is exactly one owner of the timer at any moment.
+
+    Measured on the built app, an 81-step drag at 60 Hz: no writes during the
+    drag, one after it, and the hash lands on the value the slider ended on.
+    Without the debounce the same gesture writes 81 times.
+
+    (An earlier reading appeared to show the debounce failing entirely. It was
+    the instrument, not the code: a remote-controlled Chrome throttles
+    requestAnimationFrame to 1 Hz when its window is not frontmost, which
+    stretched a 1.5-second drag to forty seconds and put every step further
+    apart than the debounce window. Pace synthetic drags on a timer, never on
+    rAF, or the measurement quietly becomes about the browser instead.)
+  */
+  const hashTimer = useRef(null)
   useEffect(() => {
     if (!RESULT_PHASES.includes(phase)) return
-    const written = setTimeout(() => writeHash(answers, tweaks, customName), 400)
-    return () => clearTimeout(written)
+    clearTimeout(hashTimer.current)
+    hashTimer.current = setTimeout(() => writeHash(answers, tweaks, customName), 400)
   }, [phase, answers, tweaks, customName])
+
+  useEffect(() => () => clearTimeout(hashTimer.current), [])
 
   /**
    * Someone arriving on a shared link never passed the door, so the audio was
