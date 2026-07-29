@@ -2,7 +2,12 @@ import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { RoundedBox } from '@react-three/drei'
 import * as THREE from 'three'
-import { createFlakeNormalMap, createBrushedNormalMap, createToothNormalMap } from './flakeTexture'
+import {
+  createFlakeMaps,
+  createBrushedNormalMap,
+  createToothNormalMap,
+  createIridescenceThicknessMap,
+} from './flakeTexture'
 
 /**
  * The sample panel.
@@ -43,6 +48,52 @@ const DRIFT = 0.07
 
 /** Scratch matrix for the reach measurement — the frame loop allocates nothing. */
 const clampMatrix = new THREE.Matrix4()
+
+/**
+ * Lay each map across the panel the number of times it was designed for.
+ *
+ * This is where every surface on this panel was quietly being lost.
+ * `RoundedBox` is an `ExtrudeGeometry` underneath, and three's default UV
+ * generator writes object-space coordinates straight into the UV attribute —
+ * so this panel's UVs run 0…5.68, not 0…1, and `geometry.center()` moves the
+ * positions without touching them. Every `texture.repeat` was therefore
+ * multiplied by 5.6 behind our backs: the flake map tiled 28 times across the
+ * panel, which put six to twelve flakes inside a single device pixel, and
+ * mipmapping averaged them into a flat sheen. The tooth and the brushed grain
+ * went the same way — the panel that was built to prove real materials had, in
+ * the end, no surface on it at all.
+ *
+ * Measured rather than divided by a constant, because a hardcoded assumption
+ * about these UVs is exactly what was wrong the first time. The offset lines
+ * the map up with the face, whose UV origin is not at a corner either.
+ */
+function applyTiling(geometry, maps) {
+  const uv = geometry?.attributes?.uv
+  if (!uv) return
+
+  let minU = Infinity
+  let maxU = -Infinity
+  let minV = Infinity
+  let maxV = -Infinity
+  for (let i = 0; i < uv.count; i++) {
+    const u = uv.getX(i)
+    const v = uv.getY(i)
+    if (u < minU) minU = u
+    if (u > maxU) maxU = u
+    if (v < minV) minV = v
+    if (v > maxV) maxV = v
+  }
+
+  const spanU = Math.max(1e-6, maxU - minU)
+  const spanV = Math.max(1e-6, maxV - minV)
+
+  maps.forEach((texture) => {
+    const tiles = texture.userData.tiles ?? 1
+    texture.repeat.set(tiles / spanU, tiles / spanV)
+    texture.offset.set(-minU * texture.repeat.x, -minV * texture.repeat.y)
+    texture.needsUpdate = true
+  })
+}
 
 export default function Specimen({
   params,
@@ -217,28 +268,94 @@ export default function Specimen({
   }
 
   const tooth = useMemo(() => createToothNormalMap(), [])
-  const flake = useMemo(() => createFlakeNormalMap(), [])
+  const flake = useMemo(() => createFlakeMaps(), [])
   const brushed = useMemo(() => createBrushedNormalMap(), [])
+  const film = useMemo(() => createIridescenceThicknessMap(), [])
 
-  useEffect(
-    () => () => [tooth, flake, brushed].forEach((t) => t.dispose()),
-    [tooth, flake, brushed],
+  const maps = useMemo(
+    () => [tooth, flake.normal, flake.roughness, brushed, film],
+    [tooth, flake, brushed, film],
   )
 
-  // Swap the surface texture with the effect. Changing the map identity needs
-  // a shader recompile, so this is kept out of the frame loop.
+  useEffect(() => () => maps.forEach((t) => t.dispose()), [maps])
+
+  // The panel's UVs are only knowable once the geometry exists, so the tiling
+  // is applied here rather than where the maps are made.
+  useEffect(() => {
+    applyTiling(meshRef.current?.geometry, maps)
+  }, [maps])
+
+  /*
+    Seed the material once, from the live params rather than from three's
+    defaults: the frame loop only damps *towards* these, so starting on a
+    hardcoded matt grey would show one wrong frame every time the panel appears.
+
+    Mount only, and that is the whole design. Re-seeding whenever the params
+    change is exactly what the JSX props were doing wrong — it overwrites the
+    damped value with its own destination and turns every dial into a switch.
+    The frame loop owns these from here on.
+  */
+  const seed = useRef(false)
+  useEffect(() => {
+    const material = materialRef.current
+    if (!material || seed.current) return
+    seed.current = true
+    material.roughness = params.roughness
+    material.metalness = params.metalness
+    material.clearcoat = params.clearcoat
+    material.clearcoatRoughness = params.clearcoatRoughness
+    material.ior = params.ior
+    material.iridescence = params.iridescence
+    material.iridescenceIOR = params.iridescenceIOR
+    material.sheen = params.sheen
+    material.envMapIntensity = params.envMapIntensity
+    material.color.copy(colour)
+    material.sheenColor.copy(colour)
+  }, [params, colour])
+
+  /*
+    Swap the surface with the effect. Changing which maps a material carries
+    needs a shader recompile, so this is kept out of the frame loop.
+
+    Keyed on the effect's name, not on its numbers. Reading the finish back out
+    of `metalness > 0.6` worked only for as long as nobody retuned metalness —
+    and the fix to the flake lacquer does exactly that, taking it to zero.
+  */
   useEffect(() => {
     const material = materialRef.current
     if (!material) return
-    const map =
-      params.flake > 0 ? flake : params.metalness > 0.6 ? brushed : tooth
-    material.normalMap = map
-    material.normalScale.set(
-      params.flake > 0 ? 0.55 : params.metalness > 0.6 ? 0.28 : 0.06,
-      params.flake > 0 ? 0.55 : params.metalness > 0.6 ? 0.28 : 0.06,
-    )
+
+    const glitter = params.effect === 'glitter'
+    const metallic = params.effect === 'metallic'
+
+    material.normalMap = glitter ? flake.normal : metallic ? brushed : tooth
+    /*
+      The flake's tilt may now have its nominal strength: at the old tiling a
+      high value bought nothing but aliasing, so it had been held back.
+
+      Held back again on the dark pigments, though, and by the same curve the
+      sample card already uses (`glint` in Questions.jsx). A white speck on a
+      near-black lacquer is the highest contrast anything here can reach, and at
+      full tilt more platelets swing into line with the studio strip until the
+      panel stops being a panel and becomes a starfield. The card has carried
+      this guard since v3.1; the panel never did.
+    */
+    const scale = glitter ? 0.9 * (params.flake ?? 1) : metallic ? 0.28 : 0.06
+    material.normalScale.set(scale, scale)
+
+    // Only the flake lacquer has two surfaces in it — polished platelets in a
+    // binder that stays exactly as matt as the gloss slider left it.
+    material.roughnessMap = glitter ? flake.roughness : null
+
+    // Pearl carries a little iridescence too, but as an even inner glow. The
+    // varying film belongs to the interference lacquer alone — and each of them
+    // keeps its own thickness, because three reads the maximum of this range
+    // whenever there is no map and one shared range would retune both at once.
+    material.iridescenceThicknessMap = params.effect === 'iridescent' ? film : null
+    material.iridescenceThicknessRange = params.film ?? [120, 520]
+
     material.needsUpdate = true
-  }, [params.flake, params.metalness, flake, brushed, tooth])
+  }, [params.effect, params.flake, params.film, flake, brushed, tooth, film])
 
   useFrame((state, delta) => {
     const dt = Math.min(delta, 0.05)
@@ -317,6 +434,7 @@ export default function Specimen({
     )
     material.iridescence = damp(material.iridescence, params.iridescence, 5, dt)
     material.iridescenceIOR = damp(material.iridescenceIOR, params.iridescenceIOR, 5, dt)
+    material.ior = damp(material.ior, params.ior, 5, dt)
     material.sheen = damp(material.sheen, params.sheen, 5, dt)
     material.envMapIntensity = damp(material.envMapIntensity, params.envMapIntensity, 5, dt)
     material.color.lerp(colour, Math.min(1, dt * 3))
@@ -334,26 +452,34 @@ export default function Specimen({
       castShadow
     >
       {/*
-        Seeded from the live params rather than fixed defaults: the frame loop
-        only damps *towards* these, so starting on a hardcoded matt grey would
-        show one wrong frame every time the panel appears.
+        Almost nothing is a prop here, and that is the point.
+
+        Every surface value on this material is either damped in the frame loop
+        or set when the effect changes. Passing those same values as JSX props
+        as well does not seed them — it fights them. React-three-fiber diffs
+        props on every render and writes back anything it considers changed,
+        and it considers an object changed whenever the reference changes. A
+        prop written as `normalScale={new THREE.Vector2(0.06, 0.06)}` is a new
+        object every single render, so it was re-applied on every render: pick
+        "Let it catch fire", and the flake's normal scale held for the 620 ms
+        until the next phase, then snapped back to the tooth's 0.06 and stayed
+        there. By the time the panel appeared in the reveal it had been reset
+        three times over. The flake lacquer this whole file exists to render was
+        being switched off between the answer and the result — which is a second
+        cause of exactly the complaint that started this, alongside the tiling.
+
+        Numbers were quieter about it but no better off: they are compared by
+        value, so they are written back precisely when they change, which is
+        precisely when the damping was supposed to be doing the work. The
+        comment below the frame loop promised a dial and the code delivered a
+        switch.
+
+        So the material is declared bare and seeded once, imperatively, on
+        mount. The one constant left as a prop is genuinely constant.
       */}
       <meshPhysicalMaterial
         ref={materialRef}
-        color={colour}
-        roughness={params.roughness}
-        metalness={params.metalness}
-        clearcoat={params.clearcoat}
-        clearcoatRoughness={params.clearcoatRoughness}
-        iridescence={params.iridescence}
-        iridescenceIOR={params.iridescenceIOR}
-        iridescenceThicknessRange={[120, 520]}
-        sheen={params.sheen}
         sheenRoughness={0.55}
-        sheenColor={colour}
-        envMapIntensity={params.envMapIntensity}
-        normalMap={tooth}
-        normalScale={new THREE.Vector2(0.06, 0.06)}
         transparent
         opacity={0}
       />

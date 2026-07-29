@@ -163,8 +163,16 @@ export function materialParams({ colour, gloss, effect }) {
   const roughness = clamp(Math.pow(1 - gloss, 1.55), 0.09, 0.98)
 
   const base = {
+    // Carried through so the panel can pick its surface maps by name. It used
+    // to infer them from the numbers — flake from `flake > 0`, brushed from
+    // `metalness > 0.6` — which quietly tied the choice of texture to the
+    // choice of parameter value, and broke the moment either was retuned.
+    effect,
     roughness,
     metalness: 0.0,
+    // Ordinary lacquer. Raised only where an effect needs a stronger specular
+    // to work with; unlike metalness, `ior` leaves the pigment untouched.
+    ior: 1.5,
     // One coat, not two. A wall lacquer is single-layer; the clearcoat here is
     // modelling the depth of that layer, not a second mirror on top of it.
     clearcoat: clamp((gloss - 0.45) * 1.0, 0, 0.55),
@@ -179,7 +187,6 @@ export function materialParams({ colour, gloss, effect }) {
     // lowering the slope would darken the matt finishes too. The ceiling only
     // bites above gloss 0.47 — matt and silk stay exactly as they were.
     envMapIntensity: clamp(0.75 + gloss * 0.85, 0.75, 1.15),
-    flake: 0,
   }
 
   // Effects are deliberately restrained. Three.js will happily render a soap
@@ -187,14 +194,80 @@ export function materialParams({ colour, gloss, effect }) {
   // base colour — the shift is a highlight on top, not a replacement. The
   // pigment has to survive every effect, or the answers stop meaning anything.
   switch (effect) {
+    /*
+      Pearl keeps the film it always had.
+
+      Without a thickness map three reads only the *maximum* of the range, so
+      pearl's look was never "120 to 520" — it was a flat 520 nm, and at IOR 1.3
+      that is a faint magenta cast. Retuning the range for the interference
+      lacquer silently moved pearl to 400 nm, which at the same IOR casts green
+      instead. A finish nobody asked to change had its colour flipped. The range
+      belongs to the effect, not to the material.
+    */
     case 'pearl':
-      return { ...base, sheen: 0.7, iridescence: 0.16, envMapIntensity: base.envMapIntensity + 0.15 }
+      return {
+        ...base,
+        sheen: 0.7,
+        iridescence: 0.16,
+        film: [120, 520],
+        envMapIntensity: base.envMapIntensity + 0.15,
+      }
     case 'metallic':
       return { ...base, metalness: 0.72, roughness: clamp(roughness * 0.7 + 0.08, 0.06, 0.6) }
+    /*
+      Iridescent needs a brighter specular to interfere with, and there are two
+      ways to buy one. `metalness: 0.12` was the wrong one: metalness folds the
+      pigment into the reflection and takes 12% of the diffuse colour away with
+      it. Raising the refractive index leaves the pigment at full strength.
+
+      But only as far as a binder actually goes. Acrylic sits at 1.49, polyester
+      at 1.57, epoxy between 1.55 and 1.6; 1.72 is flint glass, and a highlight
+      75% brighter than any binder can return is precisely "showing what a real
+      lacquer cannot" — the one rule this file is not allowed to break. Worse,
+      the clearcoat above it is fixed at 1.5 in three, so 1.72 underneath would
+      be a stack nobody could mix. At 1.58 F0 rises from 0.040 to 0.0505: a
+      quarter more specular for the film to work with, and every number still
+      lands inside a real can of paint.
+
+      The mix factor stays well under 1 because an interference lacquer is
+      partial coverage by platelets, not a film over the whole surface.
+    */
     case 'iridescent':
-      return { ...base, iridescence: 0.5, iridescenceIOR: 1.6, metalness: 0.12 }
+      /*
+        A hundred and forty nanometres, starting at 260.
+
+        At IOR 1.6 a full turn through the hues takes about 172 nm, so 140 is
+        four-fifths of one turn: the colour walks once across the panel and
+        repeats nowhere. Past roughly 250 nm the same hue appears twice on one
+        face, and concentric repeats are precisely what makes a surface read as
+        a soap bubble rather than as a lacquer.
+      */
+      return { ...base, iridescence: 0.55, iridescenceIOR: 1.6, ior: 1.58, film: [260, 400] }
+    /*
+      Flake takes no metalness — but not for the reason first written here.
+
+      The tempting argument was that a metallic flake returns a dimmer
+      reflection than a dielectric one on dark pigments. That is simply wrong: a
+      clear-coated aluminium platelet hands back aluminium, around 0.91
+      broadband. The real reason is duller and correct — there is no metalness
+      map here, so any metalness applies to the binder between the flakes as
+      well, and the binder is not metal. Setting it to zero costs the pigment
+      nothing and misrepresents nothing.
+
+      `flake` carries how hard the platelets may be tilted, dimmed on the dark
+      answers. It mirrors `glint` on the sample card exactly, which has held
+      this guard since v3.1 while the panel went without one.
+
+      The envMapIntensity lift was propping up a sparkle that was never
+      arriving; with the flakes now resolved it goes back down.
+    */
     case 'glitter':
-      return { ...base, metalness: 0.34, flake: 1, envMapIntensity: base.envMapIntensity + 0.3 }
+      return {
+        ...base,
+        metalness: 0,
+        flake: 0.6 + colour.l * 0.4,
+        envMapIntensity: base.envMapIntensity + 0.12,
+      }
     default:
       return base
   }
