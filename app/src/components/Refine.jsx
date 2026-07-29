@@ -14,17 +14,29 @@ import { oklchToCss } from '../lib/oklch'
 
 const ease = [0.16, 1, 0.3, 1]
 
-/** Sample the engine across a slider's range to paint its track. */
+/**
+ * Sample the engine across a slider's range to paint its track.
+ *
+ * Keyed on the three numbers that can move a colour, not on the object holding
+ * them. `tweaks` is a new object on every adjustment, so every track rebuilt
+ * itself on every pointer event of every drag — thirty `composeFormula` calls
+ * and three fresh gradient strings for the browser to re-parse and re-raster,
+ * a hundred and twenty times a second. Dragging gloss was the plain waste:
+ * gloss cannot change the colour, so all three tracks were recomputed pixel for
+ * pixel identical to what they already were.
+ */
 function useTrackGradient(base, key, min, max, tweaks, steps = 9) {
+  const { hue, lightness, chroma } = tweaks
   return useMemo(() => {
     const stops = []
     for (let i = 0; i <= steps; i++) {
       const t = min + ((max - min) * i) / steps
-      const { colour } = composeFormula(base, { ...tweaks, [key]: t })
+      const { colour } = composeFormula(base, { hue, lightness, chroma, [key]: t })
       stops.push(oklchToCss(colour))
     }
     return `linear-gradient(90deg, ${stops.join(', ')})`
-  }, [base, key, min, max, tweaks, steps])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [base, key, min, max, hue, lightness, chroma, steps])
 }
 
 export default function Refine({

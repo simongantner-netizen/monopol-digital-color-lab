@@ -540,10 +540,13 @@ export function createAudioEngine() {
    * event — a hundred and twenty times a second — and each retune wrote five
    * automation events onto the same handful of AudioParams. Measured during a
    * two-second drag: twelve hundred `setTargetAtTime` calls, six hundred a
-   * second. The audio thread walks that timeline every render quantum, so the
-   * room begins to stutter at exactly the moment someone is listening for what
-   * their adjustment did to it. It is the one screen where the colour changes
-   * continuously, which is why it was the only screen that misbehaved.
+   * second, all of them overwritten before they could be heard.
+   *
+   * Housekeeping, not a bug fix. This was found while chasing a reported
+   * lock-up in this same screen and briefly mistaken for its cause; the actual
+   * culprit was Safari's `replaceState` quota, two files away. No stutter was
+   * ever observed here, and six hundred automation events a second is not a
+   * remarkable load for Web Audio. It is simply waste, and it is gone.
    *
    * Coalescing rather than dropping: the trailing call carries whatever the
    * colour ended up being, so letting go of a slider always lands on the right

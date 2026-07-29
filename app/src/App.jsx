@@ -214,10 +214,24 @@ export default function App() {
    *
    * replaceState rather than a hash assignment: a slider drag would otherwise
    * push a hundred entries into the back button.
+   *
+   * And on a trailing edge, which is not a nicety. Safari caps replaceState at
+   * a hundred calls per thirty seconds and throws a SecurityError past it;
+   * Chrome only throttles silently, which is why this was invisible in every
+   * measurement taken there. One full pull on the depth slider steps through a
+   * hundred and seventy distinct values, so a single gesture in the refine
+   * bench cleared the quota by nearly double — and the throw arrived here, in
+   * an effect. React tears down the whole root when an effect throws past no
+   * boundary: the page goes black mid-drag and does not come back. That is the
+   * reported lock-up, and it belongs to Safari on a Mac.
+   *
+   * Trailing is also simply right. Nobody reads the address bar mid-drag; the
+   * link has to be correct the moment the hand stops.
    */
   useEffect(() => {
     if (!RESULT_PHASES.includes(phase)) return
-    writeHash(answers, tweaks, customName)
+    const written = setTimeout(() => writeHash(answers, tweaks, customName), 400)
+    return () => clearTimeout(written)
   }, [phase, answers, tweaks, customName])
 
   /**

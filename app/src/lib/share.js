@@ -127,9 +127,21 @@ export const shareUrl = (answers, tweaks, customName) =>
 /**
  * Keep the address bar current without filling the back button with every
  * nudge of a slider.
+ *
+ * Guarded, because what can fail here is a browser quota and not a program
+ * error. Safari throws a SecurityError once `history.replaceState` has been
+ * called a hundred times in thirty seconds — Chrome only throttles silently,
+ * Firefox warns. The caller debounces so this ceiling should now be
+ * unreachable, but the trade is not close: an address bar that lags a moment
+ * behind is a triviality, and an exception escaping into React's effect phase
+ * takes the entire page down with it.
  */
 export function writeHash(answers, tweaks, customName) {
   const next = `#${encodeColour(answers, tweaks, customName)}`
   if (window.location.hash === next) return
-  window.history.replaceState(null, '', next)
+  try {
+    window.history.replaceState(null, '', next)
+  } catch {
+    /* Over quota. The next write carries the colour instead. */
+  }
 }
