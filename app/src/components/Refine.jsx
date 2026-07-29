@@ -166,6 +166,25 @@ export default function Refine({
               onChange={set('gloss')}
             />
 
+            {/*
+              The gloss slider above is not a separate question from this row,
+              and until now nothing said so.
+
+              Every one of these effects works on the specular reflection, and
+              how concentrated that reflection is comes straight off the gloss:
+              roughness is (1 − gloss) raised to 1.55. Pick Iris on a deep matt
+              and the interference has almost no highlight to colour, so the
+              panel correctly shows nearly nothing — which reads as a broken
+              button rather than as a real property of a matt lacquer.
+
+              The name stays "Gloss" deliberately. Matt, silk, satin, gloss and
+              high gloss are the actual finish grades of a coating, measured in
+              gloss units at sixty degrees; a paint maker reads that scale
+              without thinking. Renaming it to something about effect strength
+              would trade the one label this visitor recognises for one that
+              does not exist in their trade. So the relationship gets said out
+              loud instead.
+            */}
             <div>
               <p className="label mb-2.5 text-[10px] text-ash">Special effect</p>
               <div className="grid grid-cols-5 gap-1.5">
@@ -193,6 +212,11 @@ export default function Refine({
                   )
                 })}
               </div>
+
+              <p className="mt-2.5 text-[0.72rem] leading-snug font-light text-dim">
+                How much of it you see is set by the gloss above. Deep matt holds
+                almost nothing – there is no highlight left for it to work in.
+              </p>
             </div>
           </div>
         </div>
